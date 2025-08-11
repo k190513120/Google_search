@@ -57,7 +57,7 @@ jobs:
     
     - name: 上传搜索结果
       if: ${{ !github.event.inputs.webhook_url && !github.event.client_payload.webhook_url }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: youtube-search-results
         path: youtube_search_results_*.json
