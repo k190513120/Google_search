@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+deployment_config.json
+sample_youtube_data.json
+youtube_search_results_*.json
+config.yaml
+
+# Chrome extension build files
+chrome_extension/dist/
+chrome_extension/node_modules/
+chrome_extension/.vercel/
+chrome_extension/.trae/
+
+# Logs
+*.log
+
+# API Keys (security)
+*.key
+*.pem
+.env
+.env.local
+.env.production

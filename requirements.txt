@@ -1,0 +1,14 @@
+# YouTube搜索API依赖包
+# 用于GitHub Actions部署
+
+# Google API客户端库
+google-api-python-client==2.108.0
+
+# HTTP请求库
+requests==2.31.0
+
+# 可选：更好的HTTP客户端（如果需要代理支持）
+httplib2==0.22.0
+
+# 可选：SOCKS代理支持
+PySocks==1.7.1

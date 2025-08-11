@@ -1,0 +1,70 @@
+name: YouTube Search API
+
+# 触发条件：通过webhook或手动触发
+on:
+  workflow_dispatch:
+    inputs:
+      search_query:
+        description: '搜索关键词'
+        required: true
+        default: 'HONOR 400'
+        type: string
+      webhook_url:
+        description: 'Webhook URL (飞书多维表格等)'
+        required: false
+        type: string
+      max_results:
+        description: '最大结果数量'
+        required: false
+        default: '25'
+        type: string
+  
+  # 支持通过repository_dispatch事件触发（用于外部webhook）
+  repository_dispatch:
+    types: [youtube-search]
+
+jobs:
+  youtube-search:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout代码
+      uses: actions/checkout@v4
+    
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install google-api-python-client requests
+    
+    - name: 执行YouTube搜索
+      env:
+        YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        SEARCH_QUERY: ${{ github.event.inputs.search_query || github.event.client_payload.search_query || 'HONOR 400' }}
+        WEBHOOK_URL: ${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}
+        MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
+      run: |
+        echo "🚀 开始执行YouTube搜索"
+        echo "搜索关键词: $SEARCH_QUERY"
+        echo "最大结果数: $MAX_RESULTS"
+        echo "Webhook URL: $(if [ -n "$WEBHOOK_URL" ]; then echo '已设置'; else echo '未设置'; fi)"
+        
+        python youtube_search_webhook.py
+    
+    - name: 上传搜索结果
+      if: ${{ !github.event.inputs.webhook_url && !github.event.client_payload.webhook_url }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: youtube-search-results
+        path: youtube_search_results_*.json
+        retention-days: 30
+    
+    - name: 输出结果摘要
+      run: |
+        echo "✅ YouTube搜索任务完成"
+        echo "如果设置了Webhook URL，结果已发送到指定地址"
+        echo "如果未设置Webhook URL，结果已保存为工件(Artifacts)"

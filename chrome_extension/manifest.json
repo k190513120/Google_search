@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "飞书多维表格助手",
+  "version": "1.0.0",
+  "description": "快速创建飞书多维表格并写入数据的Chrome扩展",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "https://open.feishu.cn/*",
+    "https://open.larksuite.com/*",
+    "https://base-api.feishu.cn/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "飞书多维表格助手"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
