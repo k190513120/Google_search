@@ -18,129 +18,7 @@ import requests
 import googleapiclient.discovery
 import googleapiclient.errors
 from datetime import datetime
-
-def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
-    """获取YouTube视频评论并按点赞数排序"""
-    
-    # API配置
-    api_service_name = "youtube"
-    api_version = "v3"
-    
-    try:
-        # 创建YouTube API客户端
-        youtube = googleapiclient.discovery.build(
-            api_service_name, api_version, developerKey=api_key
-        )
-        
-        print(f"💬 正在获取视频 {video_id} 的评论...")
-        
-        # 获取视频基本信息
-        video_request = youtube.videos().list(
-            part="snippet,statistics",
-            id=video_id
-        )
-        video_response = video_request.execute()
-        
-        if not video_response.get('items'):
-            print(f"❌ 未找到视频ID: {video_id}")
-            return []
-        
-        video_info = video_response['items'][0]
-        video_snippet = video_info.get('snippet', {})
-        video_stats = video_info.get('statistics', {})
-        
-        # 获取评论
-        comments = []
-        next_page_token = None
-        
-        while len(comments) < max_comments:
-            # 计算本次请求需要获取的评论数量
-            remaining_comments = max_comments - len(comments)
-            current_max_results = min(100, remaining_comments)  # YouTube API单次最多返回100条评论
-            
-            comment_request = youtube.commentThreads().list(
-                part="snippet,replies",
-                videoId=video_id,
-                maxResults=current_max_results,
-                order="relevance",  # 按相关性排序，通常包含点赞数
-                pageToken=next_page_token
-            )
-            
-            try:
-                comment_response = comment_request.execute()
-            except googleapiclient.errors.HttpError as e:
-                if "commentsDisabled" in str(e):
-                    print(f"❌ 视频 {video_id} 的评论已被禁用")
-                    return []
-                else:
-                    print(f"❌ 获取评论时出错: {e}")
-                    return []
-            
-            # 处理评论数据
-            for item in comment_response.get('items', []):
-                comment_snippet = item['snippet']['topLevelComment']['snippet']
-                
-                comment_data = {
-                    'comment_id': item['snippet']['topLevelComment']['id'],
-                    'author_name': comment_snippet.get('authorDisplayName', 'N/A'),
-                    'author_channel_id': comment_snippet.get('authorChannelId', {}).get('value', 'N/A'),
-                    'author_profile_image': comment_snippet.get('authorProfileImageUrl', 'N/A'),
-                    'comment_text': comment_snippet.get('textDisplay', ''),
-                    'comment_text_original': comment_snippet.get('textOriginal', ''),
-                    'like_count': int(comment_snippet.get('likeCount', 0)),
-                    'published_at': comment_snippet.get('publishedAt', 'N/A'),
-                    'updated_at': comment_snippet.get('updatedAt', 'N/A'),
-                    'reply_count': int(item['snippet'].get('totalReplyCount', 0)),
-                    'parent_id': comment_snippet.get('parentId', None)
-                }
-                
-                comments.append(comment_data)
-            
-            # 检查是否还有更多评论
-            next_page_token = comment_response.get('nextPageToken')
-            if not next_page_token:
-                break
-        
-        # 按点赞数排序
-        comments.sort(key=lambda x: x['like_count'], reverse=True)
-        
-        # 限制返回数量
-        comments = comments[:max_comments]
-        
-        print(f"✅ 成功获取 {len(comments)} 条评论")
-        
-        # 构建完整的结果数据
-        result_data = {
-            'video_info': {
-                'video_id': video_id,
-                'title': video_snippet.get('title', 'N/A'),
-                'channel_title': video_snippet.get('channelTitle', 'N/A'),
-                'channel_id': video_snippet.get('channelId', 'N/A'),
-                'published_at': video_snippet.get('publishedAt', 'N/A'),
-                'view_count': int(video_stats.get('viewCount', 0)),
-                'like_count': int(video_stats.get('likeCount', 0)),
-                'comment_count': int(video_stats.get('commentCount', 0)),
-                'video_url': f"https://www.youtube.com/watch?v={video_id}"
-            },
-            'comments': comments,
-            'total_comments_fetched': len(comments),
-            'fetch_time': datetime.now().isoformat()
-        }
-        
-        # 如果提供了webhook URL，发送数据
-        if webhook_url:
-            print(f"📤 正在发送评论数据到webhook...")
-            success = send_to_webhook(result_data, webhook_url)
-            if success:
-                print("✅ 评论数据已成功发送到webhook")
-            else:
-                print("❌ 评论数据发送失败")
-        
-        return result_data
-        
-    except Exception as e:
-        print(f"❌ 获取评论时发生错误: {e}")
-        return []
+from googleapiclient.http import build_http
 
 def send_to_webhook(video_data, webhook_url):
     """发送视频数据到webhook"""
@@ -168,6 +46,170 @@ def send_to_webhook(video_data, webhook_url):
         print(f"❌ Webhook发送异常: {e}")
         return False
 
+def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
+    """获取YouTube视频的热门评论"""
+    
+    # API配置
+    api_service_name = "youtube"
+    api_version = "v3"
+    
+    try:
+        # 检查是否需要使用代理
+        http_proxy = os.getenv('HTTP_PROXY')
+        https_proxy = os.getenv('HTTPS_PROXY')
+        socks_proxy = os.getenv('SOCKS_PROXY')
+        
+        proxy_url = socks_proxy or https_proxy or http_proxy
+        
+        if proxy_url:
+            # 使用代理创建HTTP客户端
+            import httplib2
+            import socks
+            
+            if socks_proxy:
+                # SOCKS代理
+                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=proxy_type,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            else:
+                # HTTP/HTTPS代理
+                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key, http=http
+            )
+            print(f"🌐 使用代理: {proxy_url}")
+        else:
+            # 创建YouTube API客户端（无代理）
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key
+            )
+        
+        print(f"💬 正在获取视频 {video_id} 的评论...")
+        
+        # 首先获取视频基本信息
+        video_request = youtube.videos().list(
+            part="snippet,statistics",
+            id=video_id
+        )
+        video_response = video_request.execute()
+        
+        if not video_response.get('items'):
+            print("❌ 视频不存在或无法访问")
+            return None
+            
+        video_info = video_response['items'][0]
+        video_snippet = video_info.get('snippet', {})
+        video_stats = video_info.get('statistics', {})
+        
+        # 获取评论
+        comments_request = youtube.commentThreads().list(
+            part="snippet,replies",
+            videoId=video_id,
+            maxResults=min(max_comments, 100),  # YouTube API最大支持100条
+            order="relevance"  # 按相关性排序（通常包含点赞数）
+        )
+        
+        comments_response = comments_request.execute()
+        
+        # 处理评论数据
+        comments_data = []
+        for item in comments_response.get('items', []):
+            comment = item['snippet']['topLevelComment']['snippet']
+            
+            comment_data = {
+                'author_name': comment.get('authorDisplayName', ''),
+                'author_channel_url': comment.get('authorChannelUrl', ''),
+                'text': comment.get('textDisplay', ''),
+                'like_count': int(comment.get('likeCount', 0)),
+                'published_at': comment.get('publishedAt', ''),
+                'updated_at': comment.get('updatedAt', ''),
+                'reply_count': item['snippet'].get('totalReplyCount', 0)
+            }
+            comments_data.append(comment_data)
+        
+        # 按点赞数排序
+        comments_data.sort(key=lambda x: x['like_count'], reverse=True)
+        
+        # 限制返回数量
+        comments_data = comments_data[:max_comments]
+        
+        # 构建完整结果
+        result = {
+            'video_info': {
+                'video_id': video_id,
+                'title': video_snippet.get('title', ''),
+                'channel_title': video_snippet.get('channelTitle', ''),
+                'channel_id': video_snippet.get('channelId', ''),
+                'published_at': video_snippet.get('publishedAt', ''),
+                'description': video_snippet.get('description', '')[:500] + '...' if len(video_snippet.get('description', '')) > 500 else video_snippet.get('description', ''),
+                'view_count': int(video_stats.get('viewCount', 0)),
+                'like_count': int(video_stats.get('likeCount', 0)),
+                'comment_count': int(video_stats.get('commentCount', 0)),
+                'video_url': f'https://www.youtube.com/watch?v={video_id}'
+            },
+            'comments': comments_data,
+            'total_comments_fetched': len(comments_data),
+            'fetch_timestamp': datetime.now().isoformat()
+        }
+        
+        print(f"✅ 成功获取 {len(comments_data)} 条评论")
+        
+        # 如果提供了webhook URL，发送结果
+        if webhook_url:
+            print(f"📤 正在发送结果到webhook...")
+            send_success = send_to_webhook(result, webhook_url)
+            if send_success:
+                print("✅ 评论数据已成功发送到webhook")
+            else:
+                print("❌ 评论数据发送到webhook失败")
+        
+        return result
+        
+    except googleapiclient.errors.HttpError as e:
+        error_details = json.loads(e.content.decode('utf-8'))
+        error_reason = error_details.get('error', {}).get('errors', [{}])[0].get('reason', 'unknown')
+        
+        if error_reason == 'commentsDisabled':
+            print("❌ 该视频的评论功能已被禁用")
+        elif error_reason == 'videoNotFound':
+            print("❌ 视频不存在")
+        else:
+            print(f"❌ 获取评论时发生API错误: {e}")
+        
+        return {
+            'video_info': {'video_id': video_id, 'error': f'API错误: {error_reason}'},
+            'comments': [],
+            'total_comments_fetched': 0,
+            'fetch_timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }
+        
+    except Exception as e:
+        print(f"❌ 获取评论时发生错误: {e}")
+        return {
+            'video_info': {'video_id': video_id, 'error': str(e)},
+            'comments': [],
+            'total_comments_fetched': 0,
+            'fetch_timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }
+
 def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=None):
     """搜索YouTube视频并返回结果"""
     
@@ -176,10 +218,51 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
     api_version = "v3"
     
     try:
-        # 创建YouTube API客户端
-        youtube = googleapiclient.discovery.build(
-            api_service_name, api_version, developerKey=api_key
-        )
+        # 检查是否需要使用代理
+        http_proxy = os.getenv('HTTP_PROXY')
+        https_proxy = os.getenv('HTTPS_PROXY')
+        socks_proxy = os.getenv('SOCKS_PROXY')
+        
+        proxy_url = socks_proxy or https_proxy or http_proxy
+        
+        if proxy_url:
+            # 使用代理创建HTTP客户端
+            import httplib2
+            import socks
+            
+            if socks_proxy:
+                # SOCKS代理
+                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=proxy_type,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            else:
+                # HTTP/HTTPS代理
+                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key, http=http
+            )
+            print(f"🌐 使用代理: {proxy_url}")
+        else:
+            # 创建YouTube API客户端（无代理）
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key
+            )
 
         # 构建搜索请求
         search_request = youtube.search().list(
@@ -408,9 +491,9 @@ def main():
         elif mode == 'comments':
             max_comments = int(sys.argv[3])
     if len(sys.argv) > 4:
-        webhook_url = sys.argv[4]
+        api_key = sys.argv[4]  # API密钥作为第4个参数
     if len(sys.argv) > 5:
-        api_key = sys.argv[5]
+        webhook_url = sys.argv[5]  # webhook_url作为第5个参数
     
     # 验证必需参数
     if not api_key:
@@ -489,19 +572,25 @@ def main():
             )
             
             # 输出结果摘要
-            if results and 'comments' in results:
+            if results and 'comments' in results and len(results['comments']) > 0:
                 video_info = results['video_info']
                 comments = results['comments']
                 print(f"\n📋 评论获取结果摘要:")
-                print(f"🎥 视频: {video_info['title'][:60]}...")
-                print(f"📺 频道: {video_info['channel_title']}")
+                if 'title' in video_info and 'channel_title' in video_info:
+                    print(f"🎥 视频: {video_info['title'][:60]}...")
+                    print(f"📺 频道: {video_info['channel_title']}")
                 print(f"💬 获取到 {len(comments)} 条评论")
-                print(f"\n🔥 热门评论预览:")
-                for i, comment in enumerate(comments[:3], 1):  # 显示前3条评论
-                    print(f"{i}. 👤 {comment['author_name']}")
-                    print(f"   💬 {comment['text'][:100]}...")
-                    print(f"   👍 {comment['like_count']:,} 赞 | 📅 {comment['published_at']}")
-                    print()
+                if comments:
+                    print(f"\n🔥 热门评论预览:")
+                    for i, comment in enumerate(comments[:3], 1):  # 显示前3条评论
+                        print(f"{i}. 👤 {comment['author_name']}")
+                        print(f"   💬 {comment['text'][:100]}...")
+                        print(f"   👍 {comment['like_count']:,} 赞 | 📅 {comment['published_at']}")
+                        print()
+            elif results and 'error' in results:
+                print(f"\n❌ 获取评论失败: {results.get('error', '未知错误')}")
+            else:
+                print(f"\n❌ 未能获取到评论数据")
             
             # 如果没有webhook，将结果保存到文件
             if not webhook_url:

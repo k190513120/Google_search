@@ -1,44 +1,27 @@
-name: YouTube Search & Comments API
+name: YouTube Search API
 
 # 触发条件：通过webhook或手动触发
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: '运行模式 (search: 搜索视频, comments: 获取评论)'
-        required: true
-        default: 'search'
-        type: choice
-        options:
-          - search
-          - comments
       search_query:
-        description: '搜索关键词 (仅搜索模式需要)'
-        required: false
+        description: '搜索关键词'
+        required: true
         default: 'HONOR 400'
-        type: string
-      video_id:
-        description: '视频ID (仅评论模式需要)'
-        required: false
-        type: string
-      max_results:
-        description: '最大搜索结果数量 (仅搜索模式)'
-        required: false
-        default: '25'
-        type: string
-      max_comments:
-        description: '最大评论数量 (仅评论模式)'
-        required: false
-        default: '50'
         type: string
       webhook_url:
         description: 'Webhook URL (飞书多维表格等)'
         required: false
         type: string
+      max_results:
+        description: '最大结果数量'
+        required: false
+        default: '25'
+        type: string
   
   # 支持通过repository_dispatch事件触发（用于外部webhook）
   repository_dispatch:
-    types: [youtube-search, youtube-comments]
+    types: [youtube-search]
 
 jobs:
   youtube-search:
@@ -58,47 +41,30 @@ jobs:
         python -m pip install --upgrade pip
         pip install google-api-python-client requests
     
-    - name: 执行YouTube API操作
+    - name: 执行YouTube搜索
       env:
         YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        MODE: ${{ github.event.inputs.mode || github.event.client_payload.mode || 'search' }}
         SEARCH_QUERY: ${{ github.event.inputs.search_query || github.event.client_payload.search_query || 'HONOR 400' }}
-        VIDEO_ID: ${{ github.event.inputs.video_id || github.event.client_payload.video_id }}
-        MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
-        MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
         WEBHOOK_URL: ${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}
+        MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
       run: |
-        echo "🚀 开始执行YouTube API操作"
-        echo "运行模式: $MODE"
-        if [ "$MODE" = "search" ]; then
-          echo "搜索关键词: $SEARCH_QUERY"
-          echo "最大结果数: $MAX_RESULTS"
-        elif [ "$MODE" = "comments" ]; then
-          echo "视频ID: $VIDEO_ID"
-          echo "最大评论数: $MAX_COMMENTS"
-        fi
+        echo "🚀 开始执行YouTube搜索"
+        echo "搜索关键词: $SEARCH_QUERY"
+        echo "最大结果数: $MAX_RESULTS"
         echo "Webhook URL: $(if [ -n "$WEBHOOK_URL" ]; then echo '已设置'; else echo '未设置'; fi)"
         
         python youtube_search_webhook.py
     
-    - name: 上传结果文件
+    - name: 上传搜索结果
       if: ${{ !github.event.inputs.webhook_url && !github.event.client_payload.webhook_url }}
       uses: actions/upload-artifact@v4
       with:
-        name: youtube-api-results
-        path: |
-          youtube_search_results_*.json
-          youtube_comments_*.json
+        name: youtube-search-results
+        path: youtube_search_results_*.json
         retention-days: 30
     
     - name: 输出结果摘要
-      env:
-        MODE: ${{ github.event.inputs.mode || github.event.client_payload.mode || 'search' }}
       run: |
-        if [ "$MODE" = "search" ]; then
-          echo "✅ YouTube搜索任务完成"
-        elif [ "$MODE" = "comments" ]; then
-          echo "✅ YouTube评论获取任务完成"
-        fi
+        echo "✅ YouTube搜索任务完成"
         echo "如果设置了Webhook URL，结果已发送到指定地址"
         echo "如果未设置Webhook URL，结果已保存为工件(Artifacts)"

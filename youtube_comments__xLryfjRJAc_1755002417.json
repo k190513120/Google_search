@@ -1,0 +1,10 @@
+{
+  "video_info": {
+    "video_id": "_xLryfjRJAc",
+    "error": "Error connecting to SOCKS5 proxy 127.0.0.1:1080: [Errno 61] Connection refused"
+  },
+  "comments": [],
+  "total_comments_fetched": 0,
+  "fetch_timestamp": "2025-08-12T20:40:17.818133",
+  "error": "Error connecting to SOCKS5 proxy 127.0.0.1:1080: [Errno 61] Connection refused"
+}
