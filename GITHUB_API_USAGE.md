@@ -24,13 +24,6 @@
 YOUTUBE_API_KEY: 你的YouTube Data API密钥
 ```
 
-**可选的代理Secret（用于中国大陆访问）：**
-```
-HTTP_PROXY: http://127.0.0.1:7890
-HTTPS_PROXY: https://127.0.0.1:7890
-SOCKS_PROXY: socks5://127.0.0.1:1080
-```
-
 ### 2. 获取GitHub Personal Access Token
 
 1. 访问 GitHub → Settings → Developer settings → Personal access tokens
@@ -107,25 +100,7 @@ curl -X POST \
 | `video_id` | YouTube视频ID | 是 | - |
 | `max_comments` | 最大评论数量 | 否 | `50` |
 
-## 🌐 代理配置
 
-### 代理优先级
-
-程序会按以下优先级检查代理设置：
-1. `SOCKS_PROXY`（最高优先级）
-2. `HTTPS_PROXY`
-3. `HTTP_PROXY`（最低优先级）
-
-### 常见代理配置
-
-```bash
-# Clash代理
-HTTP_PROXY=http://127.0.0.1:7890
-HTTPS_PROXY=http://127.0.0.1:7890
-
-# V2Ray/Shadowsocks代理
-SOCKS_PROXY=socks5://127.0.0.1:1080
-```
 
 ## 📄 结果获取
 
@@ -177,10 +152,9 @@ curl -X POST \
 ## 🚨 注意事项
 
 1. **API配额**: YouTube Data API有每日配额限制
-2. **代理设置**: 中国大陆用户需要配置代理
-3. **Token权限**: GitHub Token需要 `repo` 权限
-4. **请求频率**: 避免过于频繁的API调用
-5. **错误处理**: 查看Actions日志排查问题
+2. **Token权限**: GitHub Token需要 `repo` 权限
+3. **请求频率**: 避免过于频繁的API调用
+4. **错误处理**: 查看Actions日志排查问题
 
 ## 🔧 故障排除
 

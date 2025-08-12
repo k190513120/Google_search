@@ -67,9 +67,7 @@ jobs:
         WEBHOOK_URL: ${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}
         MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
         MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
-        HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
-        HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
-        SOCKS_PROXY: ${{ secrets.SOCKS_PROXY }}
+        
       run: |
         echo "🚀 开始执行YouTube API任务"
         echo "模式: $MODE"
