@@ -86,6 +86,64 @@ class GitHubYouTubeSearchTrigger:
             print(f"❌ 触发异常: {e}")
             return False
     
+    def trigger_comments(self, video_id, webhook_url=None, max_comments=50):
+        """
+        触发YouTube评论获取
+        
+        Args:
+            video_id: YouTube视频ID
+            webhook_url: 结果推送地址（可选）
+            max_comments: 最大评论数量
+            
+        Returns:
+            bool: 是否触发成功
+        """
+        
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"token {self.github_token}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "event_type": "youtube-comments",
+            "client_payload": {
+                "mode": "comments",
+                "video_id": video_id,
+                "max_comments": str(max_comments),
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        # 如果提供了webhook URL，添加到payload中
+        if webhook_url:
+            payload["client_payload"]["webhook_url"] = webhook_url
+        
+        try:
+            print(f"💬 触发YouTube评论获取: {video_id}")
+            print(f"📊 最大评论数: {max_comments}")
+            print(f"📤 Webhook: {'已设置' if webhook_url else '未设置'}")
+            
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 204:
+                print("✅ 评论获取任务触发成功！")
+                print(f"🔗 查看执行状态: https://github.com/{self.github_username}/{self.github_repo}/actions")
+                return True
+            else:
+                print(f"❌ 触发失败: {response.status_code}")
+                print(f"错误信息: {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 触发异常: {e}")
+            return False
+    
     def batch_search(self, search_queries, webhook_url=None, max_results=25, delay=60):
         """
         批量触发多个搜索任务
@@ -186,8 +244,20 @@ def main():
     print("\n⏳ 等待60秒后执行批量搜索...")
     time.sleep(60)
     
-    # 示例2：批量搜索
-    print("\n📍 示例2：批量关键词搜索")
+    # 示例2：获取视频评论
+    print("\n📍 示例2：获取YouTube视频评论")
+    trigger.trigger_comments(
+        video_id="dQw4w9WgXcQ",  # 示例视频ID
+        webhook_url=WEBHOOK_URL,
+        max_comments=50
+    )
+    
+    # 等待一段时间
+    print("\n⏳ 等待60秒后执行批量搜索...")
+    time.sleep(60)
+    
+    # 示例3：批量搜索
+    print("\n📍 示例3：批量关键词搜索")
     search_keywords = [
         "HONOR 400 review",
         "HONOR 400 unboxing",

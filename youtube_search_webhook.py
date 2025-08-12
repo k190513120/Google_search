@@ -19,6 +19,129 @@ import googleapiclient.discovery
 import googleapiclient.errors
 from datetime import datetime
 
+def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
+    """获取YouTube视频评论并按点赞数排序"""
+    
+    # API配置
+    api_service_name = "youtube"
+    api_version = "v3"
+    
+    try:
+        # 创建YouTube API客户端
+        youtube = googleapiclient.discovery.build(
+            api_service_name, api_version, developerKey=api_key
+        )
+        
+        print(f"💬 正在获取视频 {video_id} 的评论...")
+        
+        # 获取视频基本信息
+        video_request = youtube.videos().list(
+            part="snippet,statistics",
+            id=video_id
+        )
+        video_response = video_request.execute()
+        
+        if not video_response.get('items'):
+            print(f"❌ 未找到视频ID: {video_id}")
+            return []
+        
+        video_info = video_response['items'][0]
+        video_snippet = video_info.get('snippet', {})
+        video_stats = video_info.get('statistics', {})
+        
+        # 获取评论
+        comments = []
+        next_page_token = None
+        
+        while len(comments) < max_comments:
+            # 计算本次请求需要获取的评论数量
+            remaining_comments = max_comments - len(comments)
+            current_max_results = min(100, remaining_comments)  # YouTube API单次最多返回100条评论
+            
+            comment_request = youtube.commentThreads().list(
+                part="snippet,replies",
+                videoId=video_id,
+                maxResults=current_max_results,
+                order="relevance",  # 按相关性排序，通常包含点赞数
+                pageToken=next_page_token
+            )
+            
+            try:
+                comment_response = comment_request.execute()
+            except googleapiclient.errors.HttpError as e:
+                if "commentsDisabled" in str(e):
+                    print(f"❌ 视频 {video_id} 的评论已被禁用")
+                    return []
+                else:
+                    print(f"❌ 获取评论时出错: {e}")
+                    return []
+            
+            # 处理评论数据
+            for item in comment_response.get('items', []):
+                comment_snippet = item['snippet']['topLevelComment']['snippet']
+                
+                comment_data = {
+                    'comment_id': item['snippet']['topLevelComment']['id'],
+                    'author_name': comment_snippet.get('authorDisplayName', 'N/A'),
+                    'author_channel_id': comment_snippet.get('authorChannelId', {}).get('value', 'N/A'),
+                    'author_profile_image': comment_snippet.get('authorProfileImageUrl', 'N/A'),
+                    'comment_text': comment_snippet.get('textDisplay', ''),
+                    'comment_text_original': comment_snippet.get('textOriginal', ''),
+                    'like_count': int(comment_snippet.get('likeCount', 0)),
+                    'published_at': comment_snippet.get('publishedAt', 'N/A'),
+                    'updated_at': comment_snippet.get('updatedAt', 'N/A'),
+                    'reply_count': int(item['snippet'].get('totalReplyCount', 0)),
+                    'parent_id': comment_snippet.get('parentId', None)
+                }
+                
+                comments.append(comment_data)
+            
+            # 检查是否还有更多评论
+            next_page_token = comment_response.get('nextPageToken')
+            if not next_page_token:
+                break
+        
+        # 按点赞数排序
+        comments.sort(key=lambda x: x['like_count'], reverse=True)
+        
+        # 限制返回数量
+        comments = comments[:max_comments]
+        
+        print(f"✅ 成功获取 {len(comments)} 条评论")
+        
+        # 构建完整的结果数据
+        result_data = {
+            'video_info': {
+                'video_id': video_id,
+                'title': video_snippet.get('title', 'N/A'),
+                'channel_title': video_snippet.get('channelTitle', 'N/A'),
+                'channel_id': video_snippet.get('channelId', 'N/A'),
+                'published_at': video_snippet.get('publishedAt', 'N/A'),
+                'view_count': int(video_stats.get('viewCount', 0)),
+                'like_count': int(video_stats.get('likeCount', 0)),
+                'comment_count': int(video_stats.get('commentCount', 0)),
+                'video_url': f"https://www.youtube.com/watch?v={video_id}"
+            },
+            'comments': comments,
+            'total_comments_fetched': len(comments),
+            'fetch_time': datetime.now().isoformat()
+        }
+        
+        # 如果提供了webhook URL，发送数据
+        if webhook_url:
+            print(f"📤 正在发送评论数据到webhook...")
+            success = send_to_webhook(result_data, webhook_url)
+            if success:
+                print("✅ 评论数据已成功发送到webhook")
+            else:
+                print("❌ 评论数据发送失败")
+        
+        return result_data
+        
+    except Exception as e:
+        print(f"❌ 获取评论时发生错误: {e}")
+        return []
+
 def send_to_webhook(video_data, webhook_url):
     """发送视频数据到webhook"""
     try:
@@ -254,23 +377,40 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
         raise Exception(error_msg)
 
 def main():
-    """主函数 - 支持命令行参数和环境变量"""
+    """主函数 - 支持命令行参数和环境变量，支持搜索和评论获取两种模式"""
     
-    # 从环境变量或命令行参数获取配置
+    # 从环境变量获取配置
     api_key = os.getenv('YOUTUBE_API_KEY')
+    mode = os.getenv('MODE', 'search')  # 默认为搜索模式
+    
+    # 搜索模式参数
     search_query = os.getenv('SEARCH_QUERY')
-    webhook_url = os.getenv('WEBHOOK_URL')
     max_results = int(os.getenv('MAX_RESULTS', '25'))
+    
+    # 评论模式参数
+    video_id = os.getenv('VIDEO_ID')
+    max_comments = int(os.getenv('MAX_COMMENTS', '50'))
+    
+    # 通用参数
+    webhook_url = os.getenv('WEBHOOK_URL')
     
     # 命令行参数优先级更高
     if len(sys.argv) > 1:
-        search_query = sys.argv[1]
+        mode = sys.argv[1]  # 第一个参数是模式
     if len(sys.argv) > 2:
-        webhook_url = sys.argv[2]
+        if mode == 'search':
+            search_query = sys.argv[2]
+        elif mode == 'comments':
+            video_id = sys.argv[2]
     if len(sys.argv) > 3:
-        api_key = sys.argv[3]
+        if mode == 'search':
+            max_results = int(sys.argv[3])
+        elif mode == 'comments':
+            max_comments = int(sys.argv[3])
     if len(sys.argv) > 4:
-        max_results = int(sys.argv[4])
+        webhook_url = sys.argv[4]
+    if len(sys.argv) > 5:
+        api_key = sys.argv[5]
     
     # 验证必需参数
     if not api_key:
@@ -278,47 +418,97 @@ def main():
         print("请设置环境变量 YOUTUBE_API_KEY 或作为命令行参数传入")
         sys.exit(1)
     
-    if not search_query:
-        print("❌ 错误: 未提供搜索关键词")
-        print("请设置环境变量 SEARCH_QUERY 或作为命令行参数传入")
+    # 根据模式验证参数
+    if mode == 'search':
+        if not search_query:
+            print("❌ 错误: 搜索模式下未提供搜索关键词")
+            print("请设置环境变量 SEARCH_QUERY 或作为命令行参数传入")
+            sys.exit(1)
+    elif mode == 'comments':
+        if not video_id:
+            print("❌ 错误: 评论模式下未提供视频ID")
+            print("请设置环境变量 VIDEO_ID 或作为命令行参数传入")
+            sys.exit(1)
+    else:
+        print("❌ 错误: 不支持的模式，请使用 'search' 或 'comments'")
         sys.exit(1)
     
     print("=" * 60)
-    print("🚀 YouTube搜索API - GitHub Webhook版本")
-    print("=" * 60)
-    print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
-    print(f"🔍 搜索关键词: {search_query}")
+    if mode == 'search':
+        print("🚀 YouTube搜索API - GitHub Webhook版本")
+        print("=" * 60)
+        print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
+        print(f"🔍 搜索关键词: {search_query}")
+        print(f"📊 最大结果数: {max_results}")
+    elif mode == 'comments':
+        print("💬 YouTube评论获取API - GitHub Webhook版本")
+        print("=" * 60)
+        print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
+        print(f"🎥 视频ID: {video_id}")
+        print(f"💬 最大评论数: {max_comments}")
+    
     print(f"📤 Webhook URL: {'已设置' if webhook_url else '未设置'}")
-    print(f"📊 最大结果数: {max_results}")
     print("=" * 60)
     
     try:
-        # 执行搜索
-        results = search_youtube_videos(
-            api_key=api_key,
-            search_query=search_query,
-            max_results=max_results,
-            webhook_url=webhook_url
-        )
+        if mode == 'search':
+            # 执行搜索
+            results = search_youtube_videos(
+                api_key=api_key,
+                search_query=search_query,
+                max_results=max_results,
+                webhook_url=webhook_url
+            )
+            
+            # 输出结果摘要
+            if results:
+                print(f"\n📋 搜索结果摘要:")
+                for i, video in enumerate(results[:5], 1):  # 显示前5个结果
+                    basic_info = video['basic_info']
+                    stats = video['statistics']
+                    print(f"{i}. {basic_info['title'][:60]}...")
+                    print(f"   📺 频道: {basic_info['channel_title']}")
+                    print(f"   👀 观看: {stats['view_count']:,} | 👍 点赞: {stats['like_count']:,}")
+                    print(f"   🔗 链接: {basic_info['video_url']}")
+                    print()
+            
+            # 如果没有webhook，将结果保存到文件
+            if not webhook_url:
+                output_file = f"youtube_search_results_{int(time.time())}.json"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
+                print(f"💾 结果已保存到: {output_file}")
         
-        # 输出结果摘要
-        if results:
-            print(f"\n📋 搜索结果摘要:")
-            for i, video in enumerate(results[:5], 1):  # 显示前5个结果
-                basic_info = video['basic_info']
-                stats = video['statistics']
-                print(f"{i}. {basic_info['title'][:60]}...")
-                print(f"   📺 频道: {basic_info['channel_title']}")
-                print(f"   👀 观看: {stats['view_count']:,} | 👍 点赞: {stats['like_count']:,}")
-                print(f"   🔗 链接: {basic_info['video_url']}")
-                print()
-        
-        # 如果没有webhook，将结果保存到文件
-        if not webhook_url:
-            output_file = f"youtube_search_results_{int(time.time())}.json"
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
-            print(f"💾 结果已保存到: {output_file}")
+        elif mode == 'comments':
+            # 执行评论获取
+            results = get_video_comments(
+                api_key=api_key,
+                video_id=video_id,
+                max_comments=max_comments,
+                webhook_url=webhook_url
+            )
+            
+            # 输出结果摘要
+            if results and 'comments' in results:
+                video_info = results['video_info']
+                comments = results['comments']
+                print(f"\n📋 评论获取结果摘要:")
+                print(f"🎥 视频: {video_info['title'][:60]}...")
+                print(f"📺 频道: {video_info['channel_title']}")
+                print(f"💬 获取到 {len(comments)} 条评论")
+                print(f"\n🔥 热门评论预览:")
+                for i, comment in enumerate(comments[:3], 1):  # 显示前3条评论
+                    print(f"{i}. 👤 {comment['author_name']}")
+                    print(f"   💬 {comment['text'][:100]}...")
+                    print(f"   👍 {comment['like_count']:,} 赞 | 📅 {comment['published_at']}")
+                    print()
+            
+            # 如果没有webhook，将结果保存到文件
+            if not webhook_url:
+                output_file = f"youtube_comments_{video_id}_{int(time.time())}.json"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
+                print(f"💾 结果已保存到: {output_file}")
         
         print("\n🎉 任务完成！")
         
