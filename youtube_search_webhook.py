@@ -210,6 +210,227 @@ def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
             'error': str(e)
         }
 
+def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
+    """获取指定频道的所有视频信息"""
+    
+    # API配置
+    api_service_name = "youtube"
+    api_version = "v3"
+    
+    try:
+        # 检查是否需要使用代理
+        http_proxy = os.getenv('HTTP_PROXY')
+        https_proxy = os.getenv('HTTPS_PROXY')
+        socks_proxy = os.getenv('SOCKS_PROXY')
+        
+        proxy_url = socks_proxy or https_proxy or http_proxy
+        
+        if proxy_url:
+            # 使用代理创建HTTP客户端
+            import httplib2
+            import socks
+            
+            if socks_proxy:
+                # SOCKS代理
+                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=proxy_type,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            else:
+                # HTTP/HTTPS代理
+                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                proxy_host = proxy_parts[0]
+                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                
+                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                    proxy_host=proxy_host,
+                    proxy_port=proxy_port
+                ))
+            
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key, http=http
+            )
+            print(f"🌐 使用代理: {proxy_url}")
+        else:
+            # 创建YouTube API客户端（无代理）
+            youtube = googleapiclient.discovery.build(
+                api_service_name, api_version, developerKey=api_key
+            )
+        
+        print(f"📺 正在获取频道 {channel_id} 的视频信息...")
+        
+        # 首先获取频道基本信息
+        channel_request = youtube.channels().list(
+            part="snippet,statistics,contentDetails",
+            id=channel_id
+        )
+        channel_response = channel_request.execute()
+        
+        if not channel_response.get('items'):
+            print("❌ 频道不存在或无法访问")
+            return None
+            
+        channel_info = channel_response['items'][0]
+        channel_snippet = channel_info.get('snippet', {})
+        channel_stats = channel_info.get('statistics', {})
+        
+        # 获取频道的上传播放列表ID
+        uploads_playlist_id = channel_info.get('contentDetails', {}).get('relatedPlaylists', {}).get('uploads')
+        
+        if not uploads_playlist_id:
+            print("❌ 无法获取频道的上传播放列表")
+            return None
+        
+        # 获取播放列表中的视频
+        all_videos = []
+        next_page_token = None
+        
+        while len(all_videos) < max_results:
+            playlist_request = youtube.playlistItems().list(
+                part="snippet,contentDetails",
+                playlistId=uploads_playlist_id,
+                maxResults=min(50, max_results - len(all_videos)),  # YouTube API最大支持50条
+                pageToken=next_page_token
+            )
+            
+            playlist_response = playlist_request.execute()
+            
+            # 收集视频ID
+            video_ids = []
+            for item in playlist_response.get('items', []):
+                video_id = item.get('contentDetails', {}).get('videoId')
+                if video_id:
+                    video_ids.append(video_id)
+            
+            if not video_ids:
+                break
+            
+            # 获取视频详细信息
+            videos_request = youtube.videos().list(
+                part="snippet,statistics,contentDetails,status,recordingDetails,topicDetails",
+                id=','.join(video_ids)
+            )
+            videos_response = videos_request.execute()
+            
+            # 处理视频数据
+            for video in videos_response.get('items', []):
+                video_snippet = video.get('snippet', {})
+                video_stats = video.get('statistics', {})
+                video_content = video.get('contentDetails', {})
+                video_status = video.get('status', {})
+                video_recording = video.get('recordingDetails', {})
+                video_topics = video.get('topicDetails', {})
+                
+                video_data = {
+                    'video_id': video.get('id', ''),
+                    'title': video_snippet.get('title', ''),
+                    'description': video_snippet.get('description', ''),
+                    'published_at': video_snippet.get('publishedAt', ''),
+                    'duration': video_content.get('duration', ''),
+                    'view_count': int(video_stats.get('viewCount', 0)),
+                    'like_count': int(video_stats.get('likeCount', 0)),
+                    'comment_count': int(video_stats.get('commentCount', 0)),
+                    'privacy_status': video_status.get('privacyStatus', ''),
+                    'video_url': f"https://www.youtube.com/watch?v={video.get('id', '')}",
+                    'thumbnail_url': video_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                    'tags': video_snippet.get('tags', []),
+                    'category_id': video_snippet.get('categoryId', ''),
+                    'default_language': video_snippet.get('defaultLanguage', ''),
+                    'definition': video_content.get('definition', ''),
+                    'caption': video_content.get('caption', ''),
+                    # 新增字段
+                    'thumbnails': video_snippet.get('thumbnails', {}),  # 完整缩略图信息
+                    'live_broadcast_content': video_snippet.get('liveBroadcastContent', ''),
+                    'default_audio_language': video_snippet.get('defaultAudioLanguage', ''),
+                    'dimension': video_content.get('dimension', ''),
+                    'projection': video_content.get('projection', ''),
+                    'has_custom_thumbnail': video_content.get('hasCustomThumbnail', False),
+                    'upload_status': video_status.get('uploadStatus', ''),
+                    'license': video_status.get('license', ''),
+                    'embeddable': video_status.get('embeddable', True),
+                    'public_stats_viewable': video_status.get('publicStatsViewable', True),
+                    'made_for_kids': video_status.get('madeForKids', False),
+                    # 录制详情（可能为空）
+                    'recording_date': video_recording.get('recordingDate', ''),
+                    'location_description': video_recording.get('locationDescription', ''),
+                    'location': video_recording.get('location', {}),
+                    # 主题详情（可能为空）
+                    'topic_ids': video_topics.get('topicIds', []),
+                    'topic_categories': video_topics.get('topicCategories', [])
+                }
+                all_videos.append(video_data)
+            
+            # 检查是否有下一页
+            next_page_token = playlist_response.get('nextPageToken')
+            if not next_page_token:
+                break
+        
+        # 按观看数排序
+        all_videos.sort(key=lambda x: x['view_count'], reverse=True)
+        
+        # 限制返回数量
+        all_videos = all_videos[:max_results]
+        
+        # 构建完整结果
+        result = {
+            'channel_info': {
+                'channel_id': channel_id,
+                'title': channel_snippet.get('title', ''),
+                'description': channel_snippet.get('description', ''),
+                'custom_url': channel_snippet.get('customUrl', ''),
+                'published_at': channel_snippet.get('publishedAt', ''),
+                'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
+                'video_count': int(channel_stats.get('videoCount', 0)),
+                'view_count': int(channel_stats.get('viewCount', 0)),
+                'channel_url': f"https://www.youtube.com/channel/{channel_id}"
+            },
+            'videos': all_videos,
+            'total_videos_fetched': len(all_videos),
+            'fetch_timestamp': datetime.now().isoformat()
+        }
+        
+        print(f"✅ 成功获取频道 {channel_snippet.get('title', channel_id)} 的 {len(all_videos)} 个视频")
+        
+        # 发送到webhook
+        if webhook_url:
+            print(f"📤 正在发送结果到webhook: {webhook_url}")
+            success = send_to_webhook(result, webhook_url)
+            if success:
+                print("✅ Webhook发送成功")
+            else:
+                print("❌ Webhook发送失败")
+        
+        return result
+        
+    except googleapiclient.errors.HttpError as e:
+        error_msg = f"YouTube API错误: {e}"
+        print(f"❌ {error_msg}")
+        return {
+            'channel_info': {'channel_id': channel_id, 'error': str(e)},
+            'videos': [],
+            'total_videos_fetched': 0,
+            'fetch_timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }
+        
+    except Exception as e:
+        print(f"❌ 获取频道视频时发生错误: {e}")
+        return {
+            'channel_info': {'channel_id': channel_id, 'error': str(e)},
+            'videos': [],
+            'total_videos_fetched': 0,
+            'fetch_timestamp': datetime.now().isoformat(),
+            'error': str(e)
+        }
+
 def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=None):
     """搜索YouTube视频并返回结果"""
     
@@ -460,7 +681,7 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
         raise Exception(error_msg)
 
 def main():
-    """主函数 - 支持命令行参数和环境变量，支持搜索和评论获取两种模式"""
+    """主函数 - 支持命令行参数和环境变量，支持搜索、评论获取和频道视频获取三种模式"""
     
     # 从环境变量获取配置
     api_key = os.getenv('YOUTUBE_API_KEY')
@@ -474,6 +695,10 @@ def main():
     video_id = os.getenv('VIDEO_ID')
     max_comments = int(os.getenv('MAX_COMMENTS', '50'))
     
+    # 频道模式参数
+    channel_id = os.getenv('CHANNEL_ID')
+    max_videos = int(os.getenv('MAX_VIDEOS', '50'))
+    
     # 通用参数
     webhook_url = os.getenv('WEBHOOK_URL')
     
@@ -485,11 +710,15 @@ def main():
             search_query = sys.argv[2]
         elif mode == 'comments':
             video_id = sys.argv[2]
+        elif mode == 'channel':
+            channel_id = sys.argv[2]
     if len(sys.argv) > 3:
         if mode == 'search':
             max_results = int(sys.argv[3])
         elif mode == 'comments':
             max_comments = int(sys.argv[3])
+        elif mode == 'channel':
+            max_videos = int(sys.argv[3])
     if len(sys.argv) > 4:
         api_key = sys.argv[4]  # API密钥作为第4个参数
     if len(sys.argv) > 5:
@@ -512,8 +741,13 @@ def main():
             print("❌ 错误: 评论模式下未提供视频ID")
             print("请设置环境变量 VIDEO_ID 或作为命令行参数传入")
             sys.exit(1)
+    elif mode == 'channel':
+        if not channel_id:
+            print("❌ 错误: 频道模式下未提供频道ID")
+            print("请设置环境变量 CHANNEL_ID 或作为命令行参数传入")
+            sys.exit(1)
     else:
-        print("❌ 错误: 不支持的模式，请使用 'search' 或 'comments'")
+        print("❌ 错误: 不支持的模式，请使用 'search'、'comments' 或 'channel'")
         sys.exit(1)
     
     print("=" * 60)
@@ -529,6 +763,12 @@ def main():
         print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
         print(f"🎥 视频ID: {video_id}")
         print(f"💬 最大评论数: {max_comments}")
+    elif mode == 'channel':
+        print("📺 YouTube频道视频获取API - GitHub Webhook版本")
+        print("=" * 60)
+        print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
+        print(f"📺 频道ID: {channel_id}")
+        print(f"🎬 最大视频数: {max_videos}")
     
     print(f"📤 Webhook URL: {'已设置' if webhook_url else '未设置'}")
     print("=" * 60)
@@ -595,6 +835,42 @@ def main():
             # 如果没有webhook，将结果保存到文件
             if not webhook_url:
                 output_file = f"youtube_comments_{video_id}_{int(time.time())}.json"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
+                print(f"💾 结果已保存到: {output_file}")
+        
+        elif mode == 'channel':
+            # 执行频道视频获取
+            results = get_channel_videos(
+                api_key=api_key,
+                channel_id=channel_id,
+                max_results=max_videos,
+                webhook_url=webhook_url
+            )
+            
+            # 输出结果摘要
+            if results and 'videos' in results and len(results['videos']) > 0:
+                channel_info = results['channel_info']
+                videos = results['videos']
+                print(f"\n📋 频道视频获取结果摘要:")
+                print(f"📺 频道: {channel_info['title'][:60]}...")
+                print(f"👥 订阅者: {channel_info['subscriber_count']:,} | 🎬 总视频: {channel_info['video_count']:,}")
+                print(f"📊 获取到 {len(videos)} 个视频")
+                if videos:
+                    print(f"\n🔥 热门视频预览:")
+                    for i, video in enumerate(videos[:5], 1):  # 显示前5个视频
+                        print(f"{i}. 🎥 {video['title'][:60]}...")
+                        print(f"   👀 观看: {video['view_count']:,} | 👍 点赞: {video['like_count']:,}")
+                        print(f"   📅 发布: {video['published_at']} | 🔗 {video['video_url']}")
+                        print()
+            elif results and 'error' in results:
+                print(f"\n❌ 获取频道视频失败: {results.get('error', '未知错误')}")
+            else:
+                print(f"\n❌ 未能获取到频道视频数据")
+            
+            # 如果没有webhook，将结果保存到文件
+            if not webhook_url:
+                output_file = f"youtube_channel_{channel_id}_{int(time.time())}.json"
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 print(f"💾 结果已保存到: {output_file}")

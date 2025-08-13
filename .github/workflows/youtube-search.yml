@@ -1,4 +1,4 @@
-name: YouTube API (Search & Comments)
+name: YouTube API (Search & Comments & Channel)
 
 # 触发条件：通过webhook或手动触发
 on:
@@ -12,6 +12,7 @@ on:
         options:
         - search
         - comments
+        - channel
       search_query:
         description: '搜索关键词 (搜索模式)'
         required: false
@@ -19,6 +20,10 @@ on:
         type: string
       video_id:
         description: '视频ID (评论模式)'
+        required: false
+        type: string
+      channel_id:
+        description: '频道ID (频道模式)'
         required: false
         type: string
       webhook_url:
@@ -35,10 +40,15 @@ on:
         required: false
         default: '50'
         type: string
+      max_videos:
+        description: '最大视频数量 (频道模式)'
+        required: false
+        default: '50'
+        type: string
   
   # 支持通过repository_dispatch事件触发（用于外部webhook）
   repository_dispatch:
-    types: [youtube-search, youtube-comments]
+    types: [youtube-search, youtube-comments, youtube-channel]
 
 jobs:
   youtube-search:
@@ -64,9 +74,11 @@ jobs:
         MODE: ${{ github.event.inputs.mode || github.event.client_payload.mode || 'search' }}
         SEARCH_QUERY: ${{ github.event.inputs.search_query || github.event.client_payload.search_query || 'HONOR 400' }}
         VIDEO_ID: ${{ github.event.inputs.video_id || github.event.client_payload.video_id }}
+        CHANNEL_ID: ${{ github.event.inputs.channel_id || github.event.client_payload.channel_id }}
         WEBHOOK_URL: ${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}
         MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
         MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
+        MAX_VIDEOS: ${{ github.event.inputs.max_videos || github.event.client_payload.max_videos || '50' }}
         
       run: |
         echo "🚀 开始执行YouTube API任务"
@@ -79,6 +91,10 @@ jobs:
           echo "视频ID: $VIDEO_ID"
           echo "最大评论数: $MAX_COMMENTS"
           python youtube_search_webhook.py comments "$VIDEO_ID" "$MAX_COMMENTS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
+        elif [ "$MODE" = "channel" ]; then
+          echo "频道ID: $CHANNEL_ID"
+          echo "最大视频数: $MAX_VIDEOS"
+          python youtube_search_webhook.py channel "$CHANNEL_ID" "$MAX_VIDEOS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
         fi
     
     - name: 上传结果文件

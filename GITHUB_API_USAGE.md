@@ -6,6 +6,7 @@
 
 - ✅ **搜索模式**: 搜索YouTube视频并获取详细信息
 - ✅ **评论模式**: 获取指定视频的热门评论
+- ✅ **频道模式**: 根据频道ID获取频道所有视频信息
 - ✅ **代理支持**: 支持HTTP/HTTPS/SOCKS代理访问
 - ✅ **Webhook推送**: 支持将结果推送到飞书等平台
 - ✅ **文件下载**: 结果自动保存为JSON文件
@@ -35,7 +36,7 @@ YOUTUBE_API_KEY: 你的YouTube Data API密钥
 ### 方法1：手动触发（GitHub网页）
 
 1. 访问仓库的Actions页面
-2. 选择 "YouTube API (Search & Comments)" 工作流
+2. 选择 "YouTube API (Search & Comments & Channel)" 工作流
 3. 点击 "Run workflow"
 4. 填写参数并运行
 
@@ -77,13 +78,31 @@ curl -X POST \
   }'
 ```
 
+#### 触发频道视频获取
+
+```bash
+curl -X POST \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Authorization: token YOUR_GITHUB_TOKEN" \
+  https://api.github.com/repos/k190513120/Google_search/dispatches \
+  -d '{
+    "event_type": "youtube-channel",
+    "client_payload": {
+      "mode": "channel",
+      "channel_id": "UCBJycsmduvYEL83R_U4JriQ",
+      "max_videos": "50",
+      "webhook_url": "YOUR_WEBHOOK_URL"
+    }
+  }'
+```
+
 ## 📊 参数说明
 
 ### 通用参数
 
 | 参数 | 描述 | 必需 | 默认值 |
 |------|------|------|--------|
-| `mode` | 模式选择 (`search` 或 `comments`) | 是 | `search` |
+| `mode` | 模式选择 (`search`、`comments` 或 `channel`) | 是 | `search` |
 | `webhook_url` | Webhook推送地址 | 否 | - |
 
 ### 搜索模式参数
@@ -99,6 +118,13 @@ curl -X POST \
 |------|------|------|--------|
 | `video_id` | YouTube视频ID | 是 | - |
 | `max_comments` | 最大评论数量 | 否 | `50` |
+
+### 频道模式参数
+
+| 参数 | 描述 | 必需 | 默认值 |
+|------|------|------|--------|
+| `channel_id` | YouTube频道ID | 是 | - |
+| `max_videos` | 最大视频数量 | 否 | `50` |
 
 
 
@@ -120,6 +146,7 @@ curl -X POST \
 
 **搜索结果**: `youtube_search_results_TIMESTAMP.json`
 **评论结果**: `youtube_comments_VIDEOID_TIMESTAMP.json`
+**频道结果**: `youtube_channel_CHANNELID_TIMESTAMP.json`
 
 ## 🔍 示例用法
 
@@ -128,8 +155,8 @@ curl -X POST \
 ```bash
 # 替换以下变量
 GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
-USERNAME="your-username"
-REPO="your-repo"
+USERNAME="k190513120"
+REPO="Google_search"
 VIDEO_ID="_xLryfjRJAc"
 WEBHOOK_URL="https://your-webhook-url.com"
 
@@ -147,6 +174,44 @@ curl -X POST \
       \"webhook_url\": \"$WEBHOOK_URL\"
     }
   }"
+```
+
+### 获取频道视频（完整示例）
+
+```bash
+# 替换以下变量
+GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+USERNAME="k190513120"
+REPO="Google_search"
+CHANNEL_ID="UCBJycsmduvYEL83R_U4JriQ"
+WEBHOOK_URL="https://your-webhook-url.com"
+
+# 发送请求
+curl -X POST \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/$USERNAME/$REPO/dispatches \
+  -d "{
+    \"event_type\": \"youtube-channel\",
+    \"client_payload\": {
+      \"mode\": \"channel\",
+      \"channel_id\": \"$CHANNEL_ID\",
+      \"max_videos\": \"50\",
+      \"webhook_url\": \"$WEBHOOK_URL\"
+    }
+  }"
+```
+
+### 本地测试（使用代理）
+
+如果在中国大陆使用，需要配置代理避免timeout：
+
+```bash
+# 使用SOCKS代理（推荐）
+SOCKS_PROXY="socks5://127.0.0.1:7890" python3 youtube_search_webhook.py channel UCsWXFpmDDCLzWmSaz2i-U6g 10 YOUR_API_KEY
+
+# 使用HTTP代理
+HTTP_PROXY="http://127.0.0.1:7890" python3 youtube_search_webhook.py channel UCsWXFpmDDCLzWmSaz2i-U6g 10 YOUR_API_KEY
 ```
 
 ## 🚨 注意事项
