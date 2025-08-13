@@ -164,7 +164,9 @@ curl -X POST \
 
 ## 🌐 代理配置
 
-如果在中国大陆使用，建议配置代理避免超时：
+**重要：GitHub Actions环境会自动检测并跳过代理配置，无需手动设置。**
+
+如果在本地环境（中国大陆）使用，建议配置代理避免超时：
 
 ### SOCKS代理（推荐）
 ```bash
@@ -181,6 +183,10 @@ HTTP_PROXY="http://127.0.0.1:7890" python3 youtube_search_webhook.py channel CHA
 export SOCKS_PROXY="socks5://127.0.0.1:7890"
 python3 youtube_search_webhook.py channel CHANNEL_ID 10 API_KEY
 ```
+
+### 环境自动检测
+- **GitHub Actions环境**：自动直连YouTube API，无需代理配置
+- **本地环境**：根据环境变量（SOCKS_PROXY、HTTP_PROXY、HTTPS_PROXY）自动配置代理
 
 ## 📝 注意事项
 

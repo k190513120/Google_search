@@ -54,51 +54,61 @@ def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
     api_version = "v3"
     
     try:
-        # 检查是否需要使用代理
-        http_proxy = os.getenv('HTTP_PROXY')
-        https_proxy = os.getenv('HTTPS_PROXY')
-        socks_proxy = os.getenv('SOCKS_PROXY')
+        # 检查是否在GitHub Actions环境中运行
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
         
-        proxy_url = socks_proxy or https_proxy or http_proxy
-        
-        if proxy_url:
-            # 使用代理创建HTTP客户端
-            import httplib2
-            import socks
-            
-            if socks_proxy:
-                # SOCKS代理
-                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
-                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=proxy_type,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            else:
-                # HTTP/HTTPS代理
-                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            
-            youtube = googleapiclient.discovery.build(
-                api_service_name, api_version, developerKey=api_key, http=http
-            )
-            print(f"🌐 使用代理: {proxy_url}")
-        else:
-            # 创建YouTube API客户端（无代理）
+        if is_github_actions:
+            # GitHub Actions环境，直接创建客户端（无需代理）
             youtube = googleapiclient.discovery.build(
                 api_service_name, api_version, developerKey=api_key
             )
+            print("🚀 GitHub Actions环境，直接连接YouTube API")
+        else:
+            # 本地环境，检查是否需要使用代理
+            http_proxy = os.getenv('HTTP_PROXY')
+            https_proxy = os.getenv('HTTPS_PROXY')
+            socks_proxy = os.getenv('SOCKS_PROXY')
+            
+            proxy_url = socks_proxy or https_proxy or http_proxy
+            
+            if proxy_url:
+                # 使用代理创建HTTP客户端
+                import httplib2
+                import socks
+                
+                if socks_proxy:
+                    # SOCKS代理
+                    proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                    proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=proxy_type,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                else:
+                    # HTTP/HTTPS代理
+                    proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key, http=http
+                )
+                print(f"🌐 使用代理: {proxy_url}")
+            else:
+                # 创建YouTube API客户端（无代理）
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key
+                )
         
         print(f"💬 正在获取视频 {video_id} 的评论...")
         
@@ -218,51 +228,61 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
     api_version = "v3"
     
     try:
-        # 检查是否需要使用代理
-        http_proxy = os.getenv('HTTP_PROXY')
-        https_proxy = os.getenv('HTTPS_PROXY')
-        socks_proxy = os.getenv('SOCKS_PROXY')
+        # 检查是否在GitHub Actions环境中运行
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
         
-        proxy_url = socks_proxy or https_proxy or http_proxy
-        
-        if proxy_url:
-            # 使用代理创建HTTP客户端
-            import httplib2
-            import socks
-            
-            if socks_proxy:
-                # SOCKS代理
-                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
-                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=proxy_type,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            else:
-                # HTTP/HTTPS代理
-                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            
-            youtube = googleapiclient.discovery.build(
-                api_service_name, api_version, developerKey=api_key, http=http
-            )
-            print(f"🌐 使用代理: {proxy_url}")
-        else:
-            # 创建YouTube API客户端（无代理）
+        if is_github_actions:
+            # GitHub Actions环境，直接创建客户端（无需代理）
             youtube = googleapiclient.discovery.build(
                 api_service_name, api_version, developerKey=api_key
             )
+            print("🚀 GitHub Actions环境，直接连接YouTube API")
+        else:
+            # 本地环境，检查是否需要使用代理
+            http_proxy = os.getenv('HTTP_PROXY')
+            https_proxy = os.getenv('HTTPS_PROXY')
+            socks_proxy = os.getenv('SOCKS_PROXY')
+            
+            proxy_url = socks_proxy or https_proxy or http_proxy
+            
+            if proxy_url:
+                # 使用代理创建HTTP客户端
+                import httplib2
+                import socks
+                
+                if socks_proxy:
+                    # SOCKS代理
+                    proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                    proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=proxy_type,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                else:
+                    # HTTP/HTTPS代理
+                    proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key, http=http
+                )
+                print(f"🌐 使用代理: {proxy_url}")
+            else:
+                # 创建YouTube API客户端（无代理）
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key
+                )
         
         print(f"📺 正在获取频道 {channel_id} 的视频信息...")
         
@@ -439,51 +459,61 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
     api_version = "v3"
     
     try:
-        # 检查是否需要使用代理
-        http_proxy = os.getenv('HTTP_PROXY')
-        https_proxy = os.getenv('HTTPS_PROXY')
-        socks_proxy = os.getenv('SOCKS_PROXY')
+        # 检查是否在GitHub Actions环境中运行
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
         
-        proxy_url = socks_proxy or https_proxy or http_proxy
-        
-        if proxy_url:
-            # 使用代理创建HTTP客户端
-            import httplib2
-            import socks
-            
-            if socks_proxy:
-                # SOCKS代理
-                proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
-                proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=proxy_type,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            else:
-                # HTTP/HTTPS代理
-                proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
-                proxy_host = proxy_parts[0]
-                proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
-                
-                http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
-                    proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
-                    proxy_host=proxy_host,
-                    proxy_port=proxy_port
-                ))
-            
-            youtube = googleapiclient.discovery.build(
-                api_service_name, api_version, developerKey=api_key, http=http
-            )
-            print(f"🌐 使用代理: {proxy_url}")
-        else:
-            # 创建YouTube API客户端（无代理）
+        if is_github_actions:
+            # GitHub Actions环境，直接创建客户端（无需代理）
             youtube = googleapiclient.discovery.build(
                 api_service_name, api_version, developerKey=api_key
             )
+            print("🚀 GitHub Actions环境，直接连接YouTube API")
+        else:
+            # 本地环境，检查是否需要使用代理
+            http_proxy = os.getenv('HTTP_PROXY')
+            https_proxy = os.getenv('HTTPS_PROXY')
+            socks_proxy = os.getenv('SOCKS_PROXY')
+            
+            proxy_url = socks_proxy or https_proxy or http_proxy
+            
+            if proxy_url:
+                # 使用代理创建HTTP客户端
+                import httplib2
+                import socks
+                
+                if socks_proxy:
+                    # SOCKS代理
+                    proxy_parts = socks_proxy.replace('socks5://', '').replace('socks4://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 1080
+                    proxy_type = socks.PROXY_TYPE_SOCKS5 if 'socks5' in socks_proxy else socks.PROXY_TYPE_SOCKS4
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=proxy_type,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                else:
+                    # HTTP/HTTPS代理
+                    proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split(':')
+                    proxy_host = proxy_parts[0]
+                    proxy_port = int(proxy_parts[1]) if len(proxy_parts) > 1 else 8080
+                    
+                    http = httplib2.Http(proxy_info=httplib2.ProxyInfo(
+                        proxy_type=httplib2.socks.PROXY_TYPE_HTTP,
+                        proxy_host=proxy_host,
+                        proxy_port=proxy_port
+                    ))
+                
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key, http=http
+                )
+                print(f"🌐 使用代理: {proxy_url}")
+            else:
+                # 创建YouTube API客户端（无代理）
+                youtube = googleapiclient.discovery.build(
+                    api_service_name, api_version, developerKey=api_key
+                )
 
         # 构建搜索请求
         search_request = youtube.search().list(

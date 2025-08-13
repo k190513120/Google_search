@@ -204,7 +204,9 @@ curl -X POST \
 
 ### 本地测试（使用代理）
 
-如果在中国大陆使用，需要配置代理避免timeout：
+**注意：GitHub Actions环境会自动检测并跳过代理配置，无需手动设置。**
+
+如果在本地环境（中国大陆）使用，需要配置代理避免timeout：
 
 ```bash
 # 使用SOCKS代理（推荐）
@@ -213,6 +215,10 @@ SOCKS_PROXY="socks5://127.0.0.1:7890" python3 youtube_search_webhook.py channel 
 # 使用HTTP代理
 HTTP_PROXY="http://127.0.0.1:7890" python3 youtube_search_webhook.py channel UCsWXFpmDDCLzWmSaz2i-U6g 10 YOUR_API_KEY
 ```
+
+**环境自动检测：**
+- GitHub Actions环境：自动直连YouTube API，无需代理
+- 本地环境：根据环境变量自动配置代理
 
 ## 🚨 注意事项
 
