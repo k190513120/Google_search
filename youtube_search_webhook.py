@@ -406,6 +406,7 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
                 'description': channel_snippet.get('description', ''),
                 'custom_url': channel_snippet.get('customUrl', ''),
                 'published_at': channel_snippet.get('publishedAt', ''),
+                'country': channel_snippet.get('country', ''),  # 添加这行
                 'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
                 'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
                 'video_count': int(channel_stats.get('videoCount', 0)),
