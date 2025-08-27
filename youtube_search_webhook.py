@@ -453,7 +453,7 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
         }
 
 def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=None):
-    """搜索YouTube视频并返回结果"""
+    """搜索YouTube视频并返回结果，支持分页获取更多结果"""
     
     # API配置
     api_service_name = "youtube"
@@ -516,42 +516,83 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
                     api_service_name, api_version, developerKey=api_key
                 )
 
-        # 构建搜索请求
-        search_request = youtube.search().list(
-            part="snippet",
-            q=search_query,
-            maxResults=max_results,
-            order="viewCount",
-            type="video"  # 只搜索视频
-        )
-    
-        # 执行搜索请求
+        # 分页获取搜索结果
+        all_video_ids = []
+        next_page_token = None
+        search_requests_count = 0
+        
         print(f"🔍 正在搜索: {search_query}")
-        search_response = search_request.execute()
-        print("✅ 搜索请求成功！")
+        print(f"📊 目标结果数: {max_results}")
         
-        # 收集视频ID
-        video_ids = []
-        for item in search_response.get('items', []):
-            video_id = item.get('id', {}).get('videoId')
-            if video_id:
-                video_ids.append(video_id)
+        while len(all_video_ids) < max_results:
+            # 计算本次请求需要获取的结果数
+            remaining_results = max_results - len(all_video_ids)
+            current_max_results = min(50, remaining_results)  # YouTube API单次最大50条
+            
+            # 构建搜索请求
+            search_request = youtube.search().list(
+                part="snippet",
+                q=search_query,
+                maxResults=current_max_results,
+                order="viewCount",
+                type="video",  # 只搜索视频
+                pageToken=next_page_token
+            )
         
-        if not video_ids:
+            # 执行搜索请求
+            search_response = search_request.execute()
+            search_requests_count += 1
+            print(f"✅ 第{search_requests_count}次搜索请求成功！获取到 {len(search_response.get('items', []))} 条结果")
+            
+            # 收集视频ID
+            for item in search_response.get('items', []):
+                video_id = item.get('id', {}).get('videoId')
+                if video_id:
+                    all_video_ids.append(video_id)
+            
+            # 检查是否有下一页
+            next_page_token = search_response.get('nextPageToken')
+            if not next_page_token:
+                print("📄 已到达搜索结果末页")
+                break
+                
+            # 如果已经获取足够的结果，退出循环
+            if len(all_video_ids) >= max_results:
+                break
+        
+        # 限制结果数量
+        all_video_ids = all_video_ids[:max_results]
+        
+        if not all_video_ids:
             print("❌ 未找到任何视频")
             return []
+            
+        print(f"📋 总共收集到 {len(all_video_ids)} 个视频ID")
+        print(f"💰 搜索配额消耗: {search_requests_count * 100} 单位")
         
-        # 获取视频详细统计信息
-        print(f"📊 正在获取 {len(video_ids)} 个视频的详细信息...")
-        videos_request = youtube.videos().list(
-            part="snippet,statistics,contentDetails,status,recordingDetails,topicDetails",
-            id=','.join(video_ids)
-        )
-        videos_response = videos_request.execute()
+        # 分批获取视频详细信息（YouTube API限制单次最多50个ID）
+        all_video_details = []
+        batch_size = 50
+        videos_requests_count = 0
+        
+        for i in range(0, len(all_video_ids), batch_size):
+            batch_ids = all_video_ids[i:i + batch_size]
+            print(f"📋 处理第 {i//batch_size + 1} 批视频 ({len(batch_ids)} 个)")
+            
+            videos_request = youtube.videos().list(
+                part="snippet,statistics,contentDetails,status,recordingDetails,topicDetails",
+                id=','.join(batch_ids)
+            )
+            videos_response = videos_request.execute()
+            videos_requests_count += 1
+            all_video_details.extend(videos_response.get('items', []))
+        
+        print(f"💰 视频详情配额消耗: {videos_requests_count * 1} 单位")
+        print(f"💰 总配额消耗: {search_requests_count * 100 + videos_requests_count * 1} 单位")
         
         # 构建视频详细信息字典
         video_details = {}
-        for video in videos_response.get('items', []):
+        for video in all_video_details:
             video_id = video.get('id')
             if video_id:
                 video_details[video_id] = {
@@ -566,18 +607,21 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
         # 处理搜索结果
         processed_videos = []
         
-        for i, item in enumerate(search_response['items'], 1):
-            # 基本信息
-            video_id = item.get('id', {}).get('videoId', 'N/A')
-            snippet = item.get('snippet', {})
+        for i, video_id in enumerate(all_video_ids, 1):
+            if video_id not in video_details:
+                continue
+                
+            # 获取视频详细信息
+            video = video_details[video_id]
+            snippet = video.get('snippet', {})
             
             # 获取所有详细信息
-            video_snippet = video_details.get(video_id, {}).get('snippet', {})
-            stats = video_details.get(video_id, {}).get('statistics', {})
-            content_details = video_details.get(video_id, {}).get('contentDetails', {})
-            status = video_details.get(video_id, {}).get('status', {})
-            recording_details = video_details.get(video_id, {}).get('recordingDetails', {})
-            topic_details = video_details.get(video_id, {}).get('topicDetails', {})
+            video_snippet = video.get('snippet', {})
+            stats = video.get('statistics', {})
+            content_details = video.get('contentDetails', {})
+            status = video.get('status', {})
+            recording_details = video.get('recordingDetails', {})
+            topic_details = video.get('topicDetails', {})
             
             # 构建完整的视频数据结构
             video_data = {
