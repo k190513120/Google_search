@@ -311,12 +311,22 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
         # 获取播放列表中的视频
         all_videos = []
         next_page_token = None
+        page_count = 0
+        total_fetched = 0
+        
+        print(f"📊 开始获取频道视频，目标数量: {max_results}")
         
         while len(all_videos) < max_results:
+            page_count += 1
+            remaining_results = max_results - len(all_videos)
+            current_max_results = min(50, remaining_results)  # YouTube API单次最大50条
+            
+            print(f"📄 正在获取第 {page_count} 页，本页目标: {current_max_results} 条")
+            
             playlist_request = youtube.playlistItems().list(
                 part="snippet,contentDetails",
                 playlistId=uploads_playlist_id,
-                maxResults=min(50, max_results - len(all_videos)),  # YouTube API最大支持50条
+                maxResults=current_max_results,
                 pageToken=next_page_token
             )
             
@@ -330,7 +340,10 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
                     video_ids.append(video_id)
             
             if not video_ids:
+                print(f"⚠️ 第 {page_count} 页没有找到视频，停止获取")
                 break
+            
+            print(f"✅ 第 {page_count} 页获取到 {len(video_ids)} 个视频ID")
             
             # 获取视频详细信息
             videos_request = youtube.videos().list(
@@ -389,7 +402,19 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
             
             # 检查是否有下一页
             next_page_token = playlist_response.get('nextPageToken')
+            total_fetched = len(all_videos)
+            
+            print(f"📈 当前已获取 {total_fetched} 个视频")
+            
             if not next_page_token:
+                print(f"📄 已到达最后一页，总共获取了 {total_fetched} 个视频")
+                break
+            else:
+                print(f"➡️ 存在下一页，继续获取...")
+                
+            # 如果已经获取足够的视频，退出循环
+            if len(all_videos) >= max_results:
+                print(f"🎯 已达到目标数量 {max_results}，停止获取")
                 break
         
         # 按观看数排序
@@ -397,6 +422,12 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
         
         # 限制返回数量
         all_videos = all_videos[:max_results]
+        
+        print(f"📊 分页获取完成统计:")
+        print(f"   - 总页数: {page_count}")
+        print(f"   - 实际获取: {len(all_videos)} 个视频")
+        print(f"   - 目标数量: {max_results}")
+        print(f"   - 已按观看数排序")
         
         # 构建完整结果
         result = {
