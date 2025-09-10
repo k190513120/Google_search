@@ -22,8 +22,8 @@ on:
         description: '视频ID (评论模式)'
         required: false
         type: string
-      channel_id:
-        description: '频道ID (频道模式)'
+      channel_handle:
+        description: '频道Handle (频道模式，如@JerryRigEverything)'
         required: false
         type: string
       webhook_url:
@@ -74,7 +74,7 @@ jobs:
         MODE: ${{ github.event.inputs.mode || github.event.client_payload.mode || 'search' }}
         SEARCH_QUERY: ${{ github.event.inputs.search_query || github.event.client_payload.search_query || 'HONOR 400' }}
         VIDEO_ID: ${{ github.event.inputs.video_id || github.event.client_payload.video_id }}
-        CHANNEL_ID: ${{ github.event.inputs.channel_id || github.event.client_payload.channel_id }}
+        CHANNEL_HANDLE: ${{ github.event.inputs.channel_handle || github.event.client_payload.channel_handle }}
         WEBHOOK_URL: ${{ github.event.inputs.webhook_url || github.event.client_payload.webhook_url }}
         MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
         MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
@@ -92,9 +92,9 @@ jobs:
           echo "最大评论数: $MAX_COMMENTS"
           python youtube_search_webhook.py comments "$VIDEO_ID" "$MAX_COMMENTS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
         elif [ "$MODE" = "channel" ]; then
-          echo "频道ID: $CHANNEL_ID"
+          echo "频道Handle: $CHANNEL_HANDLE"
           echo "最大视频数: $MAX_VIDEOS"
-          python youtube_search_webhook.py channel "$CHANNEL_ID" "$MAX_VIDEOS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
+          python youtube_search_webhook.py channel "$CHANNEL_HANDLE" "$MAX_VIDEOS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
         fi
     
     - name: 上传结果文件
