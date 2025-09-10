@@ -286,13 +286,18 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
         
         print(f"📺 正在获取频道 {handle} 的视频信息...")
         
-        # forHandle参数可以接受带@或不带@的handle，直接使用原始handle
-        print(f"🔍 使用handle: {handle}")
+        # 处理handle格式：如果不是以@开头，则转换为小写并去掉空格，然后添加@前缀
+        if not handle.startswith('@'):
+            processed_handle = '@' + handle.lower().replace(' ', '')
+            print(f"🔧 处理后的handle: {handle} -> {processed_handle}")
+        else:
+            processed_handle = handle
+            print(f"🔍 使用handle: {processed_handle}")
         
         # 直接通过forHandle参数获取频道信息
         channel_request = youtube.channels().list(
             part="snippet,statistics,contentDetails",
-            forHandle=handle
+            forHandle=processed_handle
         )
         channel_response = channel_request.execute()
         
