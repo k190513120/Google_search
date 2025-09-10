@@ -286,48 +286,18 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
         
         print(f"📺 正在获取频道 {handle} 的视频信息...")
         
-        # 处理handle格式：去掉@符号
-        search_query = handle.lstrip('@')
-        print(f"🔍 搜索频道名称: {search_query}")
+        # forHandle参数可以接受带@或不带@的handle，直接使用原始handle
+        print(f"🔍 使用handle: {handle}")
         
-        # 首先通过搜索API查找频道
-        search_request = youtube.search().list(
-            part="snippet",
-            q=search_query,
-            type="channel",
-            maxResults=10
-        )
-        search_response = search_request.execute()
-        
-        if not search_response.get('items'):
-            print("❌ 未找到匹配的频道")
-            return None
-        
-        # 查找最匹配的频道
-        channel_id = None
-        for item in search_response['items']:
-            channel_title = item['snippet']['title'].lower()
-            search_title = search_query.lower()
-            # 检查频道标题是否包含搜索词或搜索词包含频道标题
-            if search_title in channel_title or channel_title in search_title:
-                channel_id = item['snippet']['channelId']
-                print(f"✅ 找到匹配频道: {item['snippet']['title']} (ID: {channel_id})")
-                break
-        
-        if not channel_id:
-            # 如果没有找到完全匹配的，使用第一个结果
-            channel_id = search_response['items'][0]['snippet']['channelId']
-            print(f"⚠️ 使用第一个搜索结果: {search_response['items'][0]['snippet']['title']} (ID: {channel_id})")
-        
-        # 通过频道ID获取详细信息
+        # 直接通过forHandle参数获取频道信息
         channel_request = youtube.channels().list(
             part="snippet,statistics,contentDetails",
-            id=channel_id
+            forHandle=handle
         )
         channel_response = channel_request.execute()
         
         if not channel_response.get('items'):
-            print("❌ 无法获取频道详细信息")
+            print("❌ 频道不存在或无法访问")
             return None
             
         channel_info = channel_response['items'][0]
