@@ -457,7 +457,7 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
             'fetch_timestamp': datetime.now().isoformat()
         }
         
-        print(f"✅ 成功获取频道 {channel_snippet.get('title', channel_id)} 的 {len(all_videos)} 个视频")
+        print(f"✅ 成功获取频道 {channel_snippet.get('title', handle)} 的 {len(all_videos)} 个视频")
         
         # 发送到webhook
         if webhook_url:
