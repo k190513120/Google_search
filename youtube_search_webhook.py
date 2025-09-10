@@ -286,10 +286,14 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
         
         print(f"📺 正在获取频道 {handle} 的视频信息...")
         
+        # 处理handle格式：去掉@符号，将空格替换为空字符串或下划线
+        clean_handle = handle.lstrip('@').replace(' ', '')
+        print(f"🔧 处理后的handle: {clean_handle}")
+        
         # 首先获取频道基本信息（通过handle）
         channel_request = youtube.channels().list(
             part="snippet,statistics,contentDetails",
-            forHandle=handle
+            forHandle=clean_handle
         )
         channel_response = channel_request.execute()
         
