@@ -286,13 +286,19 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
         
         print(f"📺 正在获取频道 {handle} 的视频信息...")
         
-        # 处理handle格式：如果不是以@开头，则转换为小写并去掉空格，然后添加@前缀
-        if not handle.startswith('@'):
-            processed_handle = '@' + handle.lower().replace(' ', '')
-            print(f"🔧 处理后的handle: {handle} -> {processed_handle}")
-        else:
+        # 处理handle格式：支持YouTube链接和直接handle
+        if handle.startswith('https://www.youtube.com/@'):
+            # 从YouTube链接中提取handle
+            processed_handle = handle.replace('https://www.youtube.com/', '')
+            print(f"🔗 从链接提取handle: {handle} -> {processed_handle}")
+        elif handle.startswith('@'):
+            # 直接使用@handle格式
             processed_handle = handle
             print(f"🔍 使用handle: {processed_handle}")
+        else:
+            # 兼容旧格式：直接添加@前缀
+            processed_handle = '@' + handle
+            print(f"🔧 添加@前缀: {handle} -> {processed_handle}")
         
         # 直接通过forHandle参数获取频道信息
         channel_request = youtube.channels().list(
@@ -988,7 +994,9 @@ def main():
             
             # 如果没有webhook，将结果保存到文件
             if not webhook_url:
-                output_file = f"youtube_channel_{channel_handle}_{int(time.time())}.json"
+                # 生成安全的文件名，移除特殊字符
+                safe_handle = channel_handle.replace('https://www.youtube.com/', '').replace('/', '_').replace(':', '_')
+                output_file = f"youtube_channel_{safe_handle}_{int(time.time())}.json"
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 print(f"💾 结果已保存到: {output_file}")
