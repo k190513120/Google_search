@@ -220,8 +220,8 @@ def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
             'error': str(e)
         }
 
-def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
-    """获取指定频道的所有视频信息"""
+def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
+    """获取指定频道的所有视频信息（通过handle）"""
     
     # API配置
     api_service_name = "youtube"
@@ -284,12 +284,12 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
                     api_service_name, api_version, developerKey=api_key
                 )
         
-        print(f"📺 正在获取频道 {channel_id} 的视频信息...")
+        print(f"📺 正在获取频道 {handle} 的视频信息...")
         
-        # 首先获取频道基本信息
+        # 首先获取频道基本信息（通过handle）
         channel_request = youtube.channels().list(
             part="snippet,statistics,contentDetails",
-            id=channel_id
+            forHandle=handle
         )
         channel_response = channel_request.execute()
         
@@ -429,10 +429,14 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
         print(f"   - 目标数量: {max_results}")
         print(f"   - 已按观看数排序")
         
+        # 获取实际的频道ID（从API响应中获取）
+        actual_channel_id = channel_info.get('id', '')
+        
         # 构建完整结果
         result = {
             'channel_info': {
-                'channel_id': channel_id,
+                'channel_id': actual_channel_id,
+                'handle': handle,
                 'title': channel_snippet.get('title', ''),
                 'description': channel_snippet.get('description', ''),
                 'custom_url': channel_snippet.get('customUrl', ''),
@@ -442,7 +446,7 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
                 'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
                 'video_count': int(channel_stats.get('videoCount', 0)),
                 'view_count': int(channel_stats.get('viewCount', 0)),
-                'channel_url': f"https://www.youtube.com/channel/{channel_id}"
+                'channel_url': f"https://www.youtube.com/channel/{actual_channel_id}"
             },
             'videos': all_videos,
             'total_videos_fetched': len(all_videos),
@@ -466,7 +470,7 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
         error_msg = f"YouTube API错误: {e}"
         print(f"❌ {error_msg}")
         return {
-            'channel_info': {'channel_id': channel_id, 'error': str(e)},
+            'channel_info': {'handle': handle, 'error': str(e)},
             'videos': [],
             'total_videos_fetched': 0,
             'fetch_timestamp': datetime.now().isoformat(),
@@ -476,7 +480,7 @@ def get_channel_videos(api_key, channel_id, max_results=50, webhook_url=None):
     except Exception as e:
         print(f"❌ 获取频道视频时发生错误: {e}")
         return {
-            'channel_info': {'channel_id': channel_id, 'error': str(e)},
+            'channel_info': {'handle': handle, 'error': str(e)},
             'videos': [],
             'total_videos_fetched': 0,
             'fetch_timestamp': datetime.now().isoformat(),
@@ -802,7 +806,7 @@ def main():
     max_comments = int(os.getenv('MAX_COMMENTS', '50'))
     
     # 频道模式参数
-    channel_id = os.getenv('CHANNEL_ID')
+    channel_handle = os.getenv('CHANNEL_HANDLE')
     max_videos = int(os.getenv('MAX_VIDEOS', '50'))
     
     # 通用参数
@@ -817,7 +821,7 @@ def main():
         elif mode == 'comments':
             video_id = sys.argv[2]
         elif mode == 'channel':
-            channel_id = sys.argv[2]
+            channel_handle = sys.argv[2]
     if len(sys.argv) > 3:
         if mode == 'search':
             max_results = int(sys.argv[3])
@@ -848,9 +852,9 @@ def main():
             print("请设置环境变量 VIDEO_ID 或作为命令行参数传入")
             sys.exit(1)
     elif mode == 'channel':
-        if not channel_id:
-            print("❌ 错误: 频道模式下未提供频道ID")
-            print("请设置环境变量 CHANNEL_ID 或作为命令行参数传入")
+        if not channel_handle:
+            print("❌ 错误: 频道模式下未提供频道Handle")
+            print("请设置环境变量 CHANNEL_HANDLE 或作为命令行参数传入")
             sys.exit(1)
     else:
         print("❌ 错误: 不支持的模式，请使用 'search'、'comments' 或 'channel'")
@@ -873,7 +877,7 @@ def main():
         print("📺 YouTube频道视频获取API - GitHub Webhook版本")
         print("=" * 60)
         print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
-        print(f"📺 频道ID: {channel_id}")
+        print(f"📺 频道Handle: {channel_handle}")
         print(f"🎬 最大视频数: {max_videos}")
     
     print(f"📤 Webhook URL: {'已设置' if webhook_url else '未设置'}")
@@ -949,7 +953,7 @@ def main():
             # 执行频道视频获取
             results = get_channel_videos(
                 api_key=api_key,
-                channel_id=channel_id,
+                handle=channel_handle,
                 max_results=max_videos,
                 webhook_url=webhook_url
             )
@@ -976,7 +980,7 @@ def main():
             
             # 如果没有webhook，将结果保存到文件
             if not webhook_url:
-                output_file = f"youtube_channel_{channel_id}_{int(time.time())}.json"
+                output_file = f"youtube_channel_{channel_handle}_{int(time.time())}.json"
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 print(f"💾 结果已保存到: {output_file}")
