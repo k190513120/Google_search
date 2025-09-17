@@ -653,6 +653,70 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
                     'topicDetails': video.get('topicDetails', {})
                 }
         
+        # 收集所有唯一的频道ID
+        unique_channel_ids = set()
+        for video in all_video_details:
+            channel_id = video.get('snippet', {}).get('channelId')
+            if channel_id:
+                unique_channel_ids.add(channel_id)
+        
+        # 批量获取频道信息
+        channel_info_dict = {}
+        if unique_channel_ids:
+            print(f"📺 正在获取 {len(unique_channel_ids)} 个频道的详细信息...")
+            
+            # 分批获取频道信息（YouTube API限制单次最多50个ID）
+            channel_batch_size = 50
+            channel_ids_list = list(unique_channel_ids)
+            
+            for i in range(0, len(channel_ids_list), channel_batch_size):
+                batch_channel_ids = channel_ids_list[i:i + channel_batch_size]
+                print(f"📋 处理第 {i//channel_batch_size + 1} 批频道 ({len(batch_channel_ids)} 个)")
+                
+                channels_request = youtube.channels().list(
+                    part="snippet,statistics,brandingSettings,status,topicDetails,localizations",
+                    id=','.join(batch_channel_ids)
+                )
+                channels_response = channels_request.execute()
+                
+                # 处理频道信息
+                for channel in channels_response.get('items', []):
+                    channel_id = channel.get('id')
+                    if channel_id:
+                        channel_snippet = channel.get('snippet', {})
+                        channel_stats = channel.get('statistics', {})
+                        channel_branding = channel.get('brandingSettings', {})
+                        channel_status = channel.get('status', {})
+                        channel_topics = channel.get('topicDetails', {})
+                        
+                        channel_info_dict[channel_id] = {
+                            'channel_id': channel_id,
+                            'title': channel_snippet.get('title', ''),
+                            'description': channel_snippet.get('description', ''),
+                            'custom_url': channel_snippet.get('customUrl', ''),
+                            'published_at': channel_snippet.get('publishedAt', ''),
+                            'country': channel_snippet.get('country', ''),
+                            'default_language': channel_snippet.get('defaultLanguage', ''),
+                            'localized_title': channel_snippet.get('localized', {}).get('title', ''),
+                            'localized_description': channel_snippet.get('localized', {}).get('description', ''),
+                            'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                            'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
+                            'video_count': int(channel_stats.get('videoCount', 0)),
+                            'view_count': int(channel_stats.get('viewCount', 0)),
+                            'subscriber_count_hidden': channel_stats.get('hiddenSubscriberCount', False),
+                            'privacy_status': channel_status.get('privacyStatus', ''),
+                            'is_linked': channel_status.get('isLinked', False),
+                            'long_uploads_status': channel_status.get('longUploadsStatus', ''),
+                            'made_for_kids': channel_status.get('madeForKids', False),
+                            'self_declared_made_for_kids': channel_status.get('selfDeclaredMadeForKids', False),
+                            'topic_ids': channel_topics.get('topicIds', []),
+                            'topic_categories': channel_topics.get('topicCategories', []),
+                            'keywords': channel_branding.get('channel', {}).get('keywords', ''),
+                            'channel_url': f"https://www.youtube.com/channel/{channel_id}"
+                        }
+            
+            print(f"✅ 成功获取 {len(channel_info_dict)} 个频道的详细信息")
+        
         # 处理搜索结果
         processed_videos = []
         
@@ -671,6 +735,10 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
             status = video.get('status', {})
             recording_details = video.get('recordingDetails', {})
             topic_details = video.get('topicDetails', {})
+            
+            # 获取频道信息
+            channel_id = snippet.get('channelId', 'N/A')
+            channel_info = channel_info_dict.get(channel_id, {})
             
             # 构建完整的视频数据结构
             video_data = {
@@ -694,6 +762,31 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
                     "localized": snippet.get('localized', {}),
                     # 合并搜索snippet和详细snippet的信息
                     "publish_time": video_snippet.get('publishTime', snippet.get('publishTime', 'N/A'))
+                },
+                "channel_info": {
+                    "channel_id": channel_info.get('channel_id', channel_id),
+                    "title": channel_info.get('title', snippet.get('channelTitle', 'N/A')),
+                    "description": channel_info.get('description', ''),
+                    "custom_url": channel_info.get('custom_url', ''),
+                    "published_at": channel_info.get('published_at', ''),
+                    "country": channel_info.get('country', ''),
+                    "default_language": channel_info.get('default_language', ''),
+                    "localized_title": channel_info.get('localized_title', ''),
+                    "localized_description": channel_info.get('localized_description', ''),
+                    "thumbnail_url": channel_info.get('thumbnail_url', ''),
+                    "subscriber_count": channel_info.get('subscriber_count', 0),
+                    "video_count": channel_info.get('video_count', 0),
+                    "view_count": channel_info.get('view_count', 0),
+                    "subscriber_count_hidden": channel_info.get('subscriber_count_hidden', False),
+                    "privacy_status": channel_info.get('privacy_status', ''),
+                    "is_linked": channel_info.get('is_linked', False),
+                    "long_uploads_status": channel_info.get('long_uploads_status', ''),
+                    "made_for_kids": channel_info.get('made_for_kids', False),
+                    "self_declared_made_for_kids": channel_info.get('self_declared_made_for_kids', False),
+                    "topic_ids": channel_info.get('topic_ids', []),
+                    "topic_categories": channel_info.get('topic_categories', []),
+                    "keywords": channel_info.get('keywords', ''),
+                    "channel_url": channel_info.get('channel_url', f"https://www.youtube.com/channel/{channel_id}" if channel_id != 'N/A' else '')
                 },
                 "statistics": {
                     "view_count": int(stats.get('viewCount', 0)) if stats.get('viewCount', '0').isdigit() else 0,
@@ -762,6 +855,17 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
             print(f"   分类ID: {video_data['snippet']['category_id']}")
             print(f"   标签: {', '.join(video_data['snippet']['tags'][:5]) if video_data['snippet']['tags'] else '无'}")
             print(f"   默认语言: {video_data['snippet']['default_language']}")
+            print(f"   \n📺 频道信息:")
+            print(f"   频道名称: {video_data['channel_info']['title']}")
+            print(f"   订阅者数: {video_data['channel_info']['subscriber_count']:,}")
+            print(f"   频道国家: {video_data['channel_info']['country'] or '未知'}")
+            print(f"   频道视频总数: {video_data['channel_info']['video_count']:,}")
+            print(f"   频道总观看数: {video_data['channel_info']['view_count']:,}")
+            print(f"   频道创建时间: {video_data['channel_info']['published_at'] or '未知'}")
+            if video_data['channel_info']['custom_url']:
+                print(f"   频道自定义URL: {video_data['channel_info']['custom_url']}")
+            if video_data['channel_info']['topic_categories']:
+                print(f"   频道主题: {', '.join(video_data['channel_info']['topic_categories'][:3])}")
             print(f"   \n📊 统计数据:")
             print(f"   观看次数: {video_data['statistics']['view_count']:,}")
             print(f"   点赞数: {video_data['statistics']['like_count']:,}")
