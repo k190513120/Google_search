@@ -501,8 +501,17 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
             'error': str(e)
         }
 
-def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=None):
-    """搜索YouTube视频并返回结果，支持分页获取更多结果"""
+def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=None, published_after=None, published_before=None):
+    """搜索YouTube视频并返回结果，支持分页获取更多结果和时间筛选
+    
+    Args:
+        api_key: YouTube API密钥
+        search_query: 搜索关键词
+        max_results: 最大结果数量
+        webhook_url: Webhook回调地址
+        published_after: 筛选此时间之后发布的视频 (格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)
+        published_before: 筛选此时间之前发布的视频 (格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)
+    """
     
     # API配置
     api_service_name = "youtube"
@@ -572,21 +581,45 @@ def search_youtube_videos(api_key, search_query, max_results=25, webhook_url=Non
         
         print(f"🔍 正在搜索: {search_query}")
         print(f"📊 目标结果数: {max_results}")
+        if published_after:
+            print(f"📅 筛选时间范围: {published_after} 之后")
+        if published_before:
+            print(f"📅 筛选时间范围: {published_before} 之前")
         
         while len(all_video_ids) < max_results:
             # 计算本次请求需要获取的结果数
             remaining_results = max_results - len(all_video_ids)
             current_max_results = min(50, remaining_results)  # YouTube API单次最大50条
             
+            # 构建搜索请求参数
+            search_params = {
+                "part": "snippet",
+                "q": search_query,
+                "maxResults": current_max_results,
+                "order": "viewCount",
+                "type": "video",  # 只搜索视频
+                "pageToken": next_page_token
+            }
+            
+            # 添加时间筛选参数
+            if published_after:
+                # 如果只有日期，添加时间部分
+                if len(published_after) == 10:  # YYYY-MM-DD格式
+                    published_after_formatted = published_after + "T00:00:00Z"
+                else:
+                    published_after_formatted = published_after
+                search_params["publishedAfter"] = published_after_formatted
+                
+            if published_before:
+                # 如果只有日期，添加时间部分
+                if len(published_before) == 10:  # YYYY-MM-DD格式
+                    published_before_formatted = published_before + "T23:59:59Z"
+                else:
+                    published_before_formatted = published_before
+                search_params["publishedBefore"] = published_before_formatted
+            
             # 构建搜索请求
-            search_request = youtube.search().list(
-                part="snippet",
-                q=search_query,
-                maxResults=current_max_results,
-                order="viewCount",
-                type="video",  # 只搜索视频
-                pageToken=next_page_token
-            )
+            search_request = youtube.search().list(**search_params)
         
             # 执行搜索请求
             search_response = search_request.execute()
@@ -918,6 +951,8 @@ def main():
     # 搜索模式参数
     search_query = os.getenv('SEARCH_QUERY')
     max_results = int(os.getenv('MAX_RESULTS', '25'))
+    published_after = os.getenv('PUBLISHED_AFTER')  # 时间筛选：之后
+    published_before = os.getenv('PUBLISHED_BEFORE')  # 时间筛选：之前
     
     # 评论模式参数
     video_id = os.getenv('VIDEO_ID')
@@ -951,6 +986,10 @@ def main():
         api_key = sys.argv[4]  # API密钥作为第4个参数
     if len(sys.argv) > 5:
         webhook_url = sys.argv[5]  # webhook_url作为第5个参数
+    if len(sys.argv) > 6 and mode == 'search':
+        published_after = sys.argv[6]  # 搜索模式的时间筛选：之后
+    if len(sys.argv) > 7 and mode == 'search':
+        published_before = sys.argv[7]  # 搜索模式的时间筛选：之前
     
     # 验证必需参数
     if not api_key:
@@ -985,6 +1024,10 @@ def main():
         print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
         print(f"🔍 搜索关键词: {search_query}")
         print(f"📊 最大结果数: {max_results}")
+        if published_after:
+            print(f"📅 筛选时间范围: {published_after} 之后")
+        if published_before:
+            print(f"📅 筛选时间范围: {published_before} 之前")
     elif mode == 'comments':
         print("💬 YouTube评论获取API - GitHub Webhook版本")
         print("=" * 60)
@@ -1008,7 +1051,9 @@ def main():
                 api_key=api_key,
                 search_query=search_query,
                 max_results=max_results,
-                webhook_url=webhook_url
+                webhook_url=webhook_url,
+                published_after=published_after,
+                published_before=published_before
             )
             
             # 输出结果摘要

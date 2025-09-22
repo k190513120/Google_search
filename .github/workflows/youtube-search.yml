@@ -45,6 +45,14 @@ on:
         required: false
         default: '50'
         type: string
+      published_after:
+        description: '筛选时间范围：之后 (搜索模式，格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)'
+        required: false
+        type: string
+      published_before:
+        description: '筛选时间范围：之前 (搜索模式，格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)'
+        required: false
+        type: string
   
   # 支持通过repository_dispatch事件触发（用于外部webhook）
   repository_dispatch:
@@ -79,6 +87,8 @@ jobs:
         MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
         MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
         MAX_VIDEOS: ${{ github.event.inputs.max_videos || github.event.client_payload.max_videos || '50' }}
+        PUBLISHED_AFTER: ${{ github.event.inputs.published_after || github.event.client_payload.published_after }}
+        PUBLISHED_BEFORE: ${{ github.event.inputs.published_before || github.event.client_payload.published_before }}
         
       run: |
         echo "🚀 开始执行YouTube API任务"
