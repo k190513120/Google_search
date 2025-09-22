@@ -45,6 +45,11 @@ on:
         required: false
         default: '50'
         type: string
+      batch_size:
+        description: '分批大小 (频道模式，每批触发一次webhook)'
+        required: false
+        default: '100'
+        type: string
       published_after:
         description: '筛选时间范围：之后 (搜索模式，格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)'
         required: false
@@ -87,6 +92,7 @@ jobs:
         MAX_RESULTS: ${{ github.event.inputs.max_results || github.event.client_payload.max_results || '25' }}
         MAX_COMMENTS: ${{ github.event.inputs.max_comments || github.event.client_payload.max_comments || '50' }}
         MAX_VIDEOS: ${{ github.event.inputs.max_videos || github.event.client_payload.max_videos || '50' }}
+        BATCH_SIZE: ${{ github.event.inputs.batch_size || github.event.client_payload.batch_size || '100' }}
         PUBLISHED_AFTER: ${{ github.event.inputs.published_after || github.event.client_payload.published_after }}
         PUBLISHED_BEFORE: ${{ github.event.inputs.published_before || github.event.client_payload.published_before }}
         
@@ -104,6 +110,7 @@ jobs:
         elif [ "$MODE" = "channel" ]; then
           echo "频道Handle: $CHANNEL_HANDLE"
           echo "最大视频数: $MAX_VIDEOS"
+          echo "分批大小: $BATCH_SIZE"
           python youtube_search_webhook.py channel "$CHANNEL_HANDLE" "$MAX_VIDEOS" "$YOUTUBE_API_KEY" "$WEBHOOK_URL"
         fi
     

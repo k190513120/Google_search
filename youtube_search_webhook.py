@@ -220,7 +220,7 @@ def get_video_comments(api_key, video_id, max_comments=50, webhook_url=None):
             'error': str(e)
         }
 
-def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
+def get_channel_videos(api_key, handle, max_results=50, webhook_url=None, batch_size=100):
     """获取指定频道的所有视频信息（通过handle）"""
     
     # API配置
@@ -420,6 +420,57 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
             
             print(f"📈 当前已获取 {total_fetched} 个视频")
             
+            # 检查是否需要分批发送webhook
+            if webhook_url and len(all_videos) >= batch_size:
+                # 计算需要发送的批次
+                batches_to_send = len(all_videos) // batch_size
+                for batch_num in range(batches_to_send):
+                    start_idx = batch_num * batch_size
+                    end_idx = start_idx + batch_size
+                    batch_videos = all_videos[start_idx:end_idx]
+                    
+                    # 构建批次数据
+                    batch_result = {
+                        'channel_info': {
+                            'channel_id': channel_info.get('id', ''),
+                            'handle': handle,
+                            'title': channel_snippet.get('title', ''),
+                            'description': channel_snippet.get('description', ''),
+                            'custom_url': channel_snippet.get('customUrl', ''),
+                            'published_at': channel_snippet.get('publishedAt', ''),
+                            'country': channel_snippet.get('country', ''),
+                            'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                            'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
+                            'video_count': int(channel_stats.get('videoCount', 0)),
+                            'view_count': int(channel_stats.get('viewCount', 0)),
+                            'channel_url': f"https://www.youtube.com/channel/{channel_info.get('id', '')}"
+                        },
+                        'videos': batch_videos,
+                        'batch_info': {
+                            'batch_number': batch_num + 1,
+                            'batch_size': len(batch_videos),
+                            'total_videos_in_batch': len(batch_videos),
+                            'is_final_batch': False
+                        },
+                        'total_videos_fetched': total_fetched,
+                        'fetch_timestamp': datetime.now().isoformat()
+                    }
+                    
+                    print(f"📤 发送第 {batch_num + 1} 批数据到webhook ({len(batch_videos)} 个视频)")
+                    success = send_to_webhook(batch_result, webhook_url)
+                    if success:
+                        print(f"✅ 第 {batch_num + 1} 批webhook发送成功")
+                    else:
+                        print(f"❌ 第 {batch_num + 1} 批webhook发送失败")
+                    
+                    # 短暂延迟避免webhook服务器压力
+                    time.sleep(1)
+                
+                # 移除已发送的视频，保留未发送的部分
+                remaining_videos = all_videos[batches_to_send * batch_size:]
+                all_videos = remaining_videos
+                print(f"📊 已发送 {batches_to_send} 批数据，剩余 {len(all_videos)} 个视频待处理")
+            
             if not next_page_token:
                 print(f"📄 已到达最后一页，总共获取了 {total_fetched} 个视频")
                 break
@@ -469,14 +520,62 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None):
         
         print(f"✅ 成功获取频道 {channel_snippet.get('title', handle)} 的 {len(all_videos)} 个视频")
         
-        # 发送到webhook
-        if webhook_url:
-            print(f"📤 正在发送结果到webhook: {webhook_url}")
-            success = send_to_webhook(result, webhook_url)
+        # 发送剩余的视频到webhook（最后一批）
+        if webhook_url and all_videos:
+            # 构建最后一批数据
+            final_batch_result = {
+                'channel_info': {
+                    'channel_id': actual_channel_id,
+                    'handle': handle,
+                    'title': channel_snippet.get('title', ''),
+                    'description': channel_snippet.get('description', ''),
+                    'custom_url': channel_snippet.get('customUrl', ''),
+                    'published_at': channel_snippet.get('publishedAt', ''),
+                    'country': channel_snippet.get('country', ''),
+                    'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                    'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
+                    'video_count': int(channel_stats.get('videoCount', 0)),
+                    'view_count': int(channel_stats.get('viewCount', 0)),
+                    'channel_url': f"https://www.youtube.com/channel/{actual_channel_id}"
+                },
+                'videos': all_videos,
+                'batch_info': {
+                    'batch_number': 'final',
+                    'batch_size': len(all_videos),
+                    'total_videos_in_batch': len(all_videos),
+                    'is_final_batch': True
+                },
+                'total_videos_fetched': len(all_videos),
+                'fetch_timestamp': datetime.now().isoformat()
+            }
+            
+            print(f"📤 发送最后一批数据到webhook ({len(all_videos)} 个视频)")
+            success = send_to_webhook(final_batch_result, webhook_url)
             if success:
-                print("✅ Webhook发送成功")
+                print("✅ 最后一批webhook发送成功")
             else:
-                print("❌ Webhook发送失败")
+                print("❌ 最后一批webhook发送失败")
+        
+        # 构建完整结果用于返回（不包含batch_info）
+        result = {
+            'channel_info': {
+                'channel_id': actual_channel_id,
+                'handle': handle,
+                'title': channel_snippet.get('title', ''),
+                'description': channel_snippet.get('description', ''),
+                'custom_url': channel_snippet.get('customUrl', ''),
+                'published_at': channel_snippet.get('publishedAt', ''),
+                'country': channel_snippet.get('country', ''),
+                'thumbnail_url': channel_snippet.get('thumbnails', {}).get('high', {}).get('url', ''),
+                'subscriber_count': int(channel_stats.get('subscriberCount', 0)),
+                'video_count': int(channel_stats.get('videoCount', 0)),
+                'view_count': int(channel_stats.get('viewCount', 0)),
+                'channel_url': f"https://www.youtube.com/channel/{actual_channel_id}"
+            },
+            'videos': all_videos,
+            'total_videos_fetched': len(all_videos),
+            'fetch_timestamp': datetime.now().isoformat()
+        }
         
         return result
         
@@ -961,6 +1060,7 @@ def main():
     # 频道模式参数
     channel_handle = os.getenv('CHANNEL_HANDLE')
     max_videos = int(os.getenv('MAX_VIDEOS', '50'))
+    batch_size = int(os.getenv('BATCH_SIZE', '100'))  # 分批大小，默认100
     
     # 通用参数
     webhook_url = os.getenv('WEBHOOK_URL')
@@ -1040,6 +1140,7 @@ def main():
         print(f"🔑 API密钥: {'已设置' if api_key else '未设置'}")
         print(f"📺 频道Handle: {channel_handle}")
         print(f"🎬 最大视频数: {max_videos}")
+        print(f"📦 分批大小: {batch_size} (每批触发一次webhook)")
     
     print(f"📤 Webhook URL: {'已设置' if webhook_url else '未设置'}")
     print("=" * 60)
@@ -1118,7 +1219,8 @@ def main():
                 api_key=api_key,
                 handle=channel_handle,
                 max_results=max_videos,
-                webhook_url=webhook_url
+                webhook_url=webhook_url,
+                batch_size=batch_size
             )
             
             # 输出结果摘要
