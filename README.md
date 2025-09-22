@@ -2,6 +2,18 @@
 
 这是一个功能强大的YouTube搜索工具，支持搜索视频、获取频道信息和评论数据，并提供了分页搜索功能来突破API的单次查询限制。
 
+## ✨ 最新功能
+
+### 🕒 时间筛选功能 (NEW!)
+- 支持按发布时间范围筛选视频
+- 可设置开始时间和结束时间
+- 支持命令行、环境变量和GitHub Actions调用
+
+### 🌐 HTTP API调用 (NEW!)
+- 支持通过HTTP API远程触发GitHub Actions
+- 无需本地环境，直接调用云端执行
+- 支持所有功能模式（搜索、评论、频道）
+
 ## 🚀 主要功能
 
 ### 1. 视频搜索（支持分页）
@@ -174,11 +186,121 @@ python youtube_search_webhook.py channel "频道ID" --max_results 50
 
 # 获取评论
 python youtube_search_webhook.py comments "视频ID" --max_results 30
+
+# 使用时间筛选搜索视频 (NEW!)
+python youtube_search_webhook.py search "搜索关键词" --max_results 100 --published_after "2024-01-01" --published_before "2024-12-31"
 ```
+
+## 🕒 时间筛选功能使用指南
+
+### 命令行参数
+```bash
+# 搜索2024年发布的视频
+python youtube_search_webhook.py search "机器学习" --published_after "2024-01-01" --published_before "2024-12-31"
+
+# 搜索最近30天的视频
+python youtube_search_webhook.py search "Python教程" --published_after "2024-11-01"
+```
+
+### 环境变量设置
+```bash
+export PUBLISHED_AFTER="2024-01-01"
+export PUBLISHED_BEFORE="2024-12-31"
+python youtube_search_webhook.py search "搜索关键词"
+```
+
+### 支持的时间格式
+- `YYYY-MM-DD`：如 `2024-01-01`
+- `YYYY-MM-DD HH:MM:SS`：如 `2024-01-01 12:00:00`
+- ISO 8601格式：如 `2024-01-01T12:00:00Z`
+
+详细使用说明请参考：[TIME_FILTER_USAGE.md](TIME_FILTER_USAGE.md)
+
+## 🌐 HTTP API调用
+
+### 快速开始
+1. 获取GitHub Personal Access Token
+2. 配置环境变量：
+   ```bash
+   export GITHUB_TOKEN="your_github_token"
+   export GITHUB_REPO="username/repository"
+   ```
+
+3. 使用Python脚本调用：
+   ```python
+   python trigger_action_example.py
+   ```
+
+### API端点
+```
+POST https://api.github.com/repos/{owner}/{repo}/dispatches
+```
+
+### 支持的事件类型
+- `youtube-search`：视频搜索
+- `youtube-comments`：评论获取  
+- `youtube-channel`：频道视频获取
+
+### 使用示例
+
+#### cURL调用
+```bash
+curl -X POST \
+  -H "Authorization: token YOUR_GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/repos/USERNAME/REPO/dispatches \
+  -d '{
+    "event_type": "youtube-search",
+    "client_payload": {
+      "search_query": "机器学习",
+      "max_results": 50,
+      "published_after": "2024-01-01",
+      "published_before": "2024-12-31"
+    }
+  }'
+```
+
+#### Python调用
+```python
+import requests
+
+def trigger_youtube_search(token, repo, query, max_results=50, published_after=None, published_before=None):
+    url = f"https://api.github.com/repos/{repo}/dispatches"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    payload = {
+        "event_type": "youtube-search",
+        "client_payload": {
+            "search_query": query,
+            "max_results": max_results
+        }
+    }
+    
+    if published_after:
+        payload["client_payload"]["published_after"] = published_after
+    if published_before:
+        payload["client_payload"]["published_before"] = published_before
+    
+    response = requests.post(url, json=payload, headers=headers)
+    return response.status_code == 204
+```
+
+详细API使用说明请参考：[HTTP_API_USAGE.md](HTTP_API_USAGE.md)
 
 ## 📝 更新日志
 
-### v2.0.0 (最新)
+### v3.0.0 (最新)
+- ✨ **新增**：时间筛选功能，支持按发布时间范围搜索视频
+- ✨ **新增**：HTTP API调用支持，可远程触发GitHub Actions
+- ✨ **新增**：命令行时间参数 `--published_after` 和 `--published_before`
+- ✨ **新增**：环境变量时间配置支持
+- 📚 **新增**：详细的使用文档和API调用示例
+- 🔧 **优化**：GitHub Actions工作流支持更多触发方式
+
+### v2.0.0
 - ✨ **新增**：分页搜索功能，突破50条结果限制
 - ✨ **新增**：频道国家信息支持
 - 🔧 **优化**：API配额使用透明化
