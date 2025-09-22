@@ -17,7 +17,7 @@ import time
 import requests
 import googleapiclient.discovery
 import googleapiclient.errors
-from datetime import datetime
+from datetime import datetime, timezone
 from googleapiclient.http import build_http
 
 def send_to_webhook(video_data, webhook_url):
@@ -374,7 +374,15 @@ def get_channel_videos(api_key, handle, max_results=50, webhook_url=None, batch_
                 video_status = video.get('status', {})
                 video_recording = video.get('recordingDetails', {})
                 video_topics = video.get('topicDetails', {})
-                
+
+                # 检查发布日期是否晚于2023年12月31日
+                published_at_str = video_snippet.get('publishedAt', '')
+                if published_at_str:
+                    published_at_dt = datetime.fromisoformat(published_at_str.replace('Z', '+00:00'))
+                    if published_at_dt <= datetime(2023, 12, 31, 23, 59, 59, tzinfo=timezone.utc):
+                        print(f"⚠️ 视频 '{video_snippet.get('title', '')}' 发布于 {published_at_str}，早于2024年，跳过。")
+                        continue
+
                 video_data = {
                     'video_id': video.get('id', ''),
                     'title': video_snippet.get('title', ''),
