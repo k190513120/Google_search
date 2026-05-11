@@ -1169,12 +1169,15 @@ def main():
             if results:
                 print(f"\n📋 搜索结果摘要:")
                 for i, video in enumerate(results[:5], 1):  # 显示前5个结果
-                    basic_info = video['basic_info']
-                    stats = video['statistics']
-                    print(f"{i}. {basic_info['title'][:60]}...")
-                    print(f"   📺 频道: {basic_info['channel_title']}")
-                    print(f"   👀 观看: {stats['view_count']:,} | 👍 点赞: {stats['like_count']:,}")
-                    print(f"   🔗 链接: {basic_info['video_url']}")
+                    basic_info = video.get('basic_info', {})
+                    snippet = video.get('snippet', {})
+                    stats = video.get('statistics', {})
+                    title = snippet.get('title', 'N/A')
+                    channel_title = snippet.get('channel_title', 'N/A')
+                    print(f"{i}. {title[:60]}...")
+                    print(f"   📺 频道: {channel_title}")
+                    print(f"   👀 观看: {stats.get('view_count', 0):,} | 👍 点赞: {stats.get('like_count', 0):,}")
+                    print(f"   🔗 链接: {basic_info.get('video_url', 'N/A')}")
                     print()
             
             # 如果没有webhook，将结果保存到文件
